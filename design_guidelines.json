@@ -1,0 +1,121 @@
+{
+  "theme": "dark",
+  "archetype": "7 - Electric & Neon",
+  "archetype_reasoning": "User explicitly requested a cyberpunk, futuristic, and elite gaming organization theme with a dark black background and neon purple, electric blue, and crimson red accents. This maps perfectly to Archetype 7 for esports and gaming communities.",
+  "colors": {
+    "background": {
+      "main": "#05050A",
+      "surface": "#0D0D14",
+      "surface_elevated": "#15151F",
+      "terminal": "#000000"
+    },
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "#A0A0B0",
+      "muted": "#606070",
+      "neon_blue": "#00E5FF",
+      "neon_purple": "#B026FF",
+      "neon_red": "#FF003C"
+    },
+    "brand": {
+      "primary": "#00E5FF",
+      "secondary": "#B026FF",
+      "accent": "#FF003C"
+    },
+    "ui": {
+      "border": "#1A1A2A",
+      "border_glow": "rgba(0, 229, 255, 0.3)",
+      "border_glow_purple": "rgba(176, 38, 255, 0.3)",
+      "border_glow_red": "rgba(255, 0, 60, 0.3)",
+      "success": "#00FF66",
+      "warning": "#FFB800",
+      "error": "#FF003C"
+    }
+  },
+  "typography": {
+    "fonts": {
+      "heading": "'Unbounded', sans-serif",
+      "body": "'JetBrains Mono', monospace",
+      "kicker": "'JetBrains Mono', monospace"
+    },
+    "scales": {
+      "h1": "text-5xl sm:text-6xl md:text-7xl font-black tracking-tighter uppercase",
+      "h2": "text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight uppercase",
+      "h3": "text-xl sm:text-2xl font-bold tracking-tight uppercase",
+      "body_lg": "text-lg leading-relaxed",
+      "body": "text-base leading-relaxed",
+      "body_sm": "text-sm leading-relaxed",
+      "kicker": "text-xs tracking-[0.2em] uppercase font-bold text-brand-primary"
+    },
+    "custom_instructions": "Headings must use Unbounded for a wide, aggressive, elite gamer look. All body text, data tags, and labels must use JetBrains Mono to reinforce the 'Dark_Net' cyberpunk/hacker clan theme."
+  },
+  "layout": {
+    "spacing_system": "Generous Spacing Philosophy. Use p-8 to p-16 for main sections. Containers with borders must have internal padding (p-6 or p-8).",
+    "grids": {
+      "marketing": "MODE A: 'Tetris' Grid (asymmetric, tension-filled) for Home and About pages. Use col-span-full for hero elements.",
+      "dashboard": "MODE B: 'Control Room' Grid for Admin Dashboard and Member Profiles. Dense, data-heavy, grid-cols-1 md:grid-cols-3 lg:grid-cols-4 with gap-4."
+    },
+    "surfaces": {
+      "marketing_cards": "Retro-Futurism 'Terminal' Look. Deep black background, 1px solid border in neon colors (e.g., border-[#00E5FF]/50), and subtle drop-shadow glows.",
+      "dashboard_cards": "Flat background (#0D0D14), 1px subtle border (#1A1A2A), sharp corners or max rounded-sm.",
+      "glass": "Optical Clarity Glass. bg-black/60, backdrop-blur-xl, 1px border-white/10 for sticky headers and navigation."
+    }
+  },
+  "motion_and_interactions": {
+    "page_transitions": "Smooth fade-ins and staggered upward reveals for lists and grids.",
+    "hover_effects": "Interactive text MUST have explicit hover colors. Buttons must have a border pulse or inner glow effect on hover. Example: hover:bg-[#00E5FF]/10 hover:border-[#00E5FF] hover:shadow-[0_0_15px_rgba(0,229,255,0.5)].",
+    "glow_effects": "Use CSS drop-shadow for neon text and box-shadow for glowing containers. Example: shadow-[0_0_20px_rgba(176,38,255,0.4)]."
+  },
+  "components": {
+    "buttons": {
+      "primary": "Sharp edges (rounded-none), bg-[#FF003C], text-white, uppercase, tracking-wider, font-heading. Hover: bg-[#FF003C] shadow-[0_0_20px_rgba(255,0,60,0.6)].",
+      "secondary": "Transparent background, 1px solid border-[#00E5FF], text-[#00E5FF], uppercase, tracking-wider. Hover: bg-[#00E5FF]/10 shadow-[0_0_15px_rgba(0,229,255,0.4)]."
+    },
+    "navigation": "Sticky glass header (backdrop-blur-xl bg-black/60). Navigation links must be visible on desktop. Include 'Join Dark_Net' CTA.",
+    "badges": "Tiny, uppercase, wide tracking (tracking-[0.2em]), border 1px solid, text-xs. For player roles (Tank, Roam, etc.), use distinct neon border colors.",
+    "icons": "Use 'lucide-react' for general UI. For gaming specific, if needed, import from 'react-icons/fa6'.",
+    "libraries_required": [
+      "framer-motion",
+      "lucide-react",
+      "clsx",
+      "tailwind-merge"
+    ]
+  },
+  "media": {
+    "image_urls": [
+      {
+        "category": "hero_background",
+        "url": "https://images.pexels.com/photos/17195067/pexels-photo-17195067.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Vibrant urban alley with neon signs for Dark_Net home hero banner."
+      },
+      {
+        "category": "about_background",
+        "url": "https://images.pexels.com/photos/9072394/pexels-photo-9072394.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "High-tech gaming setup with PCs and RGB lighting for About page."
+      },
+      {
+        "category": "member_profile_1",
+        "url": "https://images.pexels.com/photos/7773546/pexels-photo-7773546.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Young man with game controller against neon backdrop. Use for Leader/MVP profile."
+      },
+      {
+        "category": "member_profile_2",
+        "url": "https://images.pexels.com/photos/7773975/pexels-photo-7773975.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Gamer portrait in neon-lit studio. Use for Co-leader/Member profile."
+      },
+      {
+        "category": "tournament_banner",
+        "url": "https://images.pexels.com/photos/7862505/pexels-photo-7862505.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Modern gaming setup with monitor and headset in neon environment."
+      }
+    ],
+    "hero_overlay": "MANDATORY: bg-black/60 to bg-black/80 to ensure neon text remains highly readable over busy cyberpunk backgrounds."
+  },
+  "testing": {
+    "attributes": [
+      "data-testid"
+    ],
+    "rules": "All interactive and key informational elements MUST include a 'data-testid' attribute (e.g., data-testid='join-clan-btn')."
+  },
+  "instructions_to_main_agent": "1. Set up Tailwind config with custom colors (neon_blue: #00E5FF, neon_purple: #B026FF, neon_red: #FF003C) and fonts (Unbounded for headings, JetBrains Mono for body). 2. Build the marketing pages (Home, About, Join Us) using pure HTML+Tailwind with Framer Motion for neon 'Tracing Beam' effects and staggered text reveals. 3. Build the Dashboard/Login using customized Shadcn components (strip borders, apply dark mode terminal styling). 4. Use provided Pexels images; NEVER use placeholder text for images. 5. Ensure APCA contrast ratios—neon text against true black backgrounds. 6. Integrate 'data-testid' on all buttons and form inputs."
+}
