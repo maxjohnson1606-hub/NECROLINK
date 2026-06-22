@@ -292,6 +292,14 @@ class GalleryItemRequest(BaseModel):
 class UserRoleRequest(BaseModel):
     role: str  # member, admin, owner
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+class ChangeEmailRequest(BaseModel):
+    current_password: str
+    new_email: EmailStr
+
 # ============ AUTH ROUTES ============
 @api_router.post("/auth/login")
 async def login(request: LoginRequest, response: Response):
@@ -661,6 +669,69 @@ async def update_order_status(order_id: str, status: str, request: Request):
 
 # ============ STATISTICS ============
 
+# ============ EXTERNAL NEWS FEEDS ============
+import feedparser
+import re as _re
+
+MLBB_YT_CHANNEL_ID = "UCqmld-BIYME2i_ooRTo1EOg"
+MLBB_INSTAGRAM = "https://www.instagram.com/mlbb_cis/"
+_feed_cache = {"data": None, "fetched_at": None}
+
+@api_router.get("/feeds/mlbb-videos")
+async def get_mlbb_videos():
+    """Fetch latest videos from official MLBB YouTube channel (cached 30 min)."""
+    now = datetime.now(timezone.utc)
+    if _feed_cache["data"] and _feed_cache["fetched_at"] and (now - _feed_cache["fetched_at"]).total_seconds() < 1800:
+        return _feed_cache["data"]
+    try:
+        feed_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={MLBB_YT_CHANNEL_ID}"
+        feed = feedparser.parse(feed_url)
+        videos = []
+        for entry in feed.entries[:15]:
+            video_id = entry.get("yt_videoid") or entry.get("id", "").replace("yt:video:", "")
+            thumbnail = ""
+            if hasattr(entry, "media_thumbnail") and entry.media_thumbnail:
+                thumbnail = entry.media_thumbnail[0].get("url", "")
+            if not thumbnail and video_id:
+                thumbnail = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+            description = ""
+            if hasattr(entry, "media_description"):
+                description = entry.media_description
+            elif hasattr(entry, "summary"):
+                description = _re.sub(r"<[^>]+>", "", entry.summary)[:300]
+            videos.append({
+                "video_id": video_id,
+                "title": entry.title,
+                "description": description,
+                "thumbnail": thumbnail,
+                "url": entry.link,
+                "published": entry.get("published", ""),
+                "author": entry.get("author", "Mobile Legends: Bang Bang"),
+            })
+        result = {
+            "source": "Mobile Legends: Bang Bang (Official YouTube)",
+            "channel_url": f"https://www.youtube.com/channel/{MLBB_YT_CHANNEL_ID}",
+            "videos": videos,
+            "fetched_at": now.isoformat(),
+        }
+        _feed_cache["data"] = result
+        _feed_cache["fetched_at"] = now
+        return result
+    except Exception as e:
+        logger.error(f"YouTube feed error: {e}")
+        return {"source": "Mobile Legends: Bang Bang", "videos": [], "error": str(e), "channel_url": f"https://www.youtube.com/channel/{MLBB_YT_CHANNEL_ID}"}
+
+@api_router.get("/feeds/mlbb-instagram")
+async def get_mlbb_instagram():
+    """Return Instagram profile info. Instagram doesn't allow reliable scraping;
+    we expose the profile link and admin can manually create news items embedding posts."""
+    return {
+        "source": "MLBB CIS Instagram",
+        "profile_url": MLBB_INSTAGRAM,
+        "handle": "@mlbb_cis",
+        "note": "Instagram restricts automated content fetching. Click to view latest posts.",
+    }
+
 # ============ USER PROFILE & MY DATA ============
 @api_router.patch("/auth/profile")
 async def update_profile(profile: ProfileUpdateRequest, request: Request):
@@ -673,6 +744,45 @@ async def update_profile(profile: ProfileUpdateRequest, request: Request):
     updated["_id"] = str(updated["_id"])
     updated.pop("password_hash", None)
     return updated
+
+@api_router.put("/auth/password")
+async def change_password(req: ChangePasswordRequest, request: Request, response: Response):
+    user = await get_current_user(request)
+    if len(req.new_password) < 6:
+        raise HTTPException(status_code=400, detail="New password must be at least 6 characters")
+    full_user = await db.users.find_one({"_id": ObjectId(user["_id"])})
+    if not verify_password(req.current_password, full_user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+    new_hash = hash_password(req.new_password)
+    await db.users.update_one(
+        {"_id": ObjectId(user["_id"])},
+        {"$set": {"password_hash": new_hash, "updated_at": datetime.now(timezone.utc)}}
+    )
+    # Refresh session
+    access_token = create_access_token(user["_id"], user["email"], user.get("role", "member"))
+    response.set_cookie("access_token", access_token, httponly=True, secure=False, samesite="lax", max_age=86400, path="/")
+    return {"message": "Password changed successfully"}
+
+@api_router.put("/auth/email")
+async def change_email(req: ChangeEmailRequest, request: Request, response: Response):
+    user = await get_current_user(request)
+    full_user = await db.users.find_one({"_id": ObjectId(user["_id"])})
+    if not verify_password(req.current_password, full_user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+    new_email = req.new_email.lower().strip()
+    if new_email == user["email"]:
+        raise HTTPException(status_code=400, detail="New email must be different from current email")
+    existing = await db.users.find_one({"email": new_email})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already in use by another account")
+    await db.users.update_one(
+        {"_id": ObjectId(user["_id"])},
+        {"$set": {"email": new_email, "updated_at": datetime.now(timezone.utc)}}
+    )
+    # Refresh session with new email
+    access_token = create_access_token(user["_id"], new_email, user.get("role", "member"))
+    response.set_cookie("access_token", access_token, httponly=True, secure=False, samesite="lax", max_age=86400, path="/")
+    return {"message": "Email changed successfully", "email": new_email}
 
 @api_router.get("/me/applications")
 async def get_my_applications(request: Request):

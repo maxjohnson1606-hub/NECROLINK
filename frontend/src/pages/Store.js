@@ -147,7 +147,6 @@ const ProductCard = ({ product, onOrder, index }) => (
 export const Store = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeSection, setActiveSection] = useState('merchandise');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
@@ -158,7 +157,7 @@ export const Store = () => {
 
   const fetchProducts = async () => {
     try {
-      const { data } = await axios.get(`${API}/products`);
+      const { data } = await axios.get(`${API}/products?section=topup`);
       setProducts(data);
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -167,26 +166,25 @@ export const Store = () => {
     }
   };
 
-  const sectionProducts = products.filter((p) => p.section === activeSection);
-  const categories = activeSection === 'merchandise' ? MERCH_CATEGORIES : TOPUP_CATEGORIES;
+  const categories = TOPUP_CATEGORIES;
   const filteredProducts = categoryFilter === 'All'
-    ? sectionProducts
-    : sectionProducts.filter((p) => p.category === categoryFilter);
+    ? products
+    : products.filter((p) => p.category === categoryFilter);
 
   return (
     <div className="min-h-screen bg-darknet-bg py-12 px-4">
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-10">
           <div className="flex justify-center mb-4">
-            <div className="w-16 h-16 bg-darknet-terminal border-2 border-neon-red flex items-center justify-center border-glow-red">
-              <ShoppingBag className="w-8 h-8 text-neon-red" />
+            <div className="w-16 h-16 bg-darknet-terminal border-2 border-neon-purple flex items-center justify-center border-glow-purple">
+              <Gem className="w-8 h-8 text-neon-purple" />
             </div>
           </div>
-          <h1 className="font-heading text-4xl sm:text-5xl md:text-6xl font-black tracking-tighter uppercase mb-4 neon-glow-red" data-testid="store-title">
-            Store
+          <h1 className="font-heading text-4xl sm:text-5xl md:text-6xl font-black tracking-tighter uppercase mb-4 neon-glow-purple" data-testid="store-title">
+            MLBB Top-Up
           </h1>
           <p className="font-body text-lg text-text-secondary tracking-wide">
-            Official NECROLINK merch & MLBB top-up services
+            Diamonds, Weekly Pass, Starlight & Event Passes
           </p>
         </div>
 
@@ -195,34 +193,6 @@ export const Store = () => {
             <p className="font-body text-sm text-neon-blue">{successMessage}</p>
           </div>
         )}
-
-        {/* Section Tabs */}
-        <div className="flex justify-center gap-3 mb-6">
-          <button
-            onClick={() => { setActiveSection('merchandise'); setCategoryFilter('All'); }}
-            data-testid="section-merchandise"
-            className={`px-6 py-3 font-heading text-sm uppercase tracking-wider border-2 transition-all ${
-              activeSection === 'merchandise'
-                ? 'border-neon-blue bg-neon-blue/10 text-neon-blue border-glow-blue'
-                : 'border-border-DEFAULT text-text-secondary hover:border-neon-blue/50'
-            }`}
-          >
-            <Package className="w-4 h-4 inline mr-2" />
-            Merchandise
-          </button>
-          <button
-            onClick={() => { setActiveSection('topup'); setCategoryFilter('All'); }}
-            data-testid="section-topup"
-            className={`px-6 py-3 font-heading text-sm uppercase tracking-wider border-2 transition-all ${
-              activeSection === 'topup'
-                ? 'border-neon-purple bg-neon-purple/10 text-neon-purple border-glow-purple'
-                : 'border-border-DEFAULT text-text-secondary hover:border-neon-purple/50'
-            }`}
-          >
-            <Gem className="w-4 h-4 inline mr-2" />
-            MLBB Top-Up
-          </button>
-        </div>
 
         {/* Category Filter */}
         <div className="flex flex-wrap gap-2 mb-8 justify-center">

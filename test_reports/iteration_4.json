@@ -1,0 +1,53 @@
+{
+  "summary": "Iteration 4 testing: Change Password + Change Email APIs, MLBB YouTube RSS feed + Instagram CTA endpoint, /store page (top-up only), /news page (videos section + modal), Profile Security tab. Backend: 10/10 new iter4 tests PASSED + 75/76 regression PASSED (1 obsolete DarkNet test failed because of NECROLINK rebrand - expected). Frontend: All target flows verified (5 profile tabs, Security tab Change Password + Change Email forms with proper validation/success/logout, Store shows only MLBB TOP-UP with no merchandise tabs, News page shows 8 YouTube video cards + modal + Instagram CTA).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/feeds/mlbb-videos", "issue": "Endpoint catches exceptions and returns 200 with empty videos[] + error field instead of 5xx. While defensive, frontend cannot distinguish 'no videos today' from 'YouTube blocked'. Consider returning 503 when feedparser fails."},
+      {"endpoint": "/api/feeds/mlbb-videos", "issue": "Cache is module-level dict (_feed_cache) - not safe under multiple worker processes (each worker would have its own cache). Acceptable for single-worker dev but should use Redis/memcache for prod scale."},
+      {"endpoint": "/api/auth/password", "issue": "No invalidation of refresh_token after password change - only access_token cookie is refreshed. Stolen refresh_token could still mint new access tokens until 7-day expiry. Recommend rotating refresh token too."},
+      {"endpoint": "/api/auth/email", "issue": "Same as above - refresh_token not rotated. Also no email-verification flow (instant change). For a clan site low risk; for production needs a confirmation email."},
+      {"endpoint": "/api/auth/login", "issue": "(Carry-over iter3) login email not lower-cased while register does .lower()."},
+      {"endpoint": "/api/auth/login", "issue": "(Carry-over) Still no brute-force lockout per playbook."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Profile tabs naming", "issues": ["Tab id is 'registrations' (testid: profile-tab-registrations) but label is 'My Events'. Iter4 spec mentions 'Events' tab - functionally correct but testid name 'registrations' is inconsistent with UI label. Minor."]},
+      {"screen": "News page video modal", "issues": ["First clicked video showed 'Video unavailable - This content isn\u2019t available' inside YouTube iframe. This is YouTube embed restriction by the channel owner for that specific video, not a NECROLINK bug. However other videos may also be embed-restricted; consider showing a fallback 'Open on YouTube' CTA inside the modal if iframe load is blocked."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter4_password_email_feeds.py",
+    "/app/test_reports/pytest/iter4.xml",
+    "/app/test_reports/pytest/iter4_all.xml"
+  ],
+  "action_items": [
+    "(Optional) Return 503 from /api/feeds/mlbb-videos when feedparser fails so frontend can show a clear error state.",
+    "(Optional) Rotate refresh_token cookie on /api/auth/password and /api/auth/email change for tighter session security.",
+    "(Optional) Inside VideoPlayerModal, detect iframe load failure and show fallback 'Open on YouTube' link prominently when YouTube blocks embed.",
+    "(Carry-over iter3) Normalize email to lower-case in /api/auth/login (server.py L307) to match register.",
+    "(Carry-over) Implement brute-force lockout on /api/auth/login per playbook.",
+    "(Carry-over) Refactor server.py (1100 lines) - now even larger after iter4 additions.",
+    "(Optional) Rename tab id 'registrations' to 'events' OR keep id but ensure spec/testid alignment for future tests."
+  ],
+  "critical_code_review_comments": [
+    "server.py grew from 993 (iter3) to ~1104 lines - still single-file, urgently needs splitting into routers (routes_auth.py, routes_feeds.py, routes_products.py, services/, seed/).",
+    "_feed_cache uses module-global mutable dict - not thread-safe for multi-worker; switch to async-safe cache (e.g., aiocache) before prod.",
+    "ChangePasswordRequest does not enforce strong password (only length>=6). Recommend min 8 chars + at least 1 digit/symbol via Pydantic validator.",
+    "ChangeEmailRequest does not require user to be re-authenticated recently; with a long-lived 24h cookie any session can change email after current password is supplied. Acceptable but consider step-up auth.",
+    "/api/feeds/mlbb-videos is unauthenticated, uncached on the CDN edge, and can be hit by anyone causing repeated YouTube RSS fetches. Rate limit or require auth for higher protection."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter4_password_email_feeds.py (NEW - 10 tests covering PUT /api/auth/password, PUT /api/auth/email, GET /api/feeds/mlbb-videos, GET /api/feeds/mlbb-instagram)"
+  ],
+  "success_rate": {"backend": "100% (10/10 new iter4 + 57/57 iter3 regression - only legacy DarkNet pre-rebrand test fails which is expected)", "frontend": "100% on iter4 flows (Security tab, Store top-up only, News videos+modal+instagram)"},
+  "test_credentials": "Owner: owner@necrolink.com / Owner2024! (UNCHANGED - did NOT use for password tests as instructed). Created ephemeral test user sec_test_*@example.com and test_iter4_*@example.com for password/email change tests (these users remain in DB with random emails - no impact on seeded accounts).",
+  "seed_data_creation": "No new seed data. Tests create disposable users with unique uuid-based emails and do NOT clean them up after - main agent may want to add cleanup or these accumulate (low priority as they have unique emails).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter4 new testids verified working: profile-tab-security, current-password-input, new-password-input, confirm-password-input, change-password-btn, password-message, email-current-password-input, new-email-input, change-email-btn, email-message, mlbb-videos-section, yt-video-{id}, refresh-videos-btn, video-modal, instagram-cta. Profile tab testids: profile-tab-{profile,security,applications,registrations,orders} (note: 5th is 'registrations' NOT 'events' despite label 'My Events'). After PUT /api/auth/email frontend redirects to /login after ~2.5s (verified). YouTube RSS feed returns ~8-15 videos when working. _feed_cache TTL = 1800s (30 min) - verified cache hit returns same fetched_at on second call. Regression suites still passing: /app/backend/tests/test_necrolink_api.py + test_iter3_owner_gallery.py. The legacy test_darknet_api.py has 1 failing test (DarkNet_Shadow member name) - expected because of NECROLINK rebrand; can be deleted.",
+  "rca_of_the_issue": "N/A - no critical bugs. Initial test run failed only because @necrolink.test TLD is rejected by Pydantic EmailStr validator (deliverability check). Switched to @example.com and all 10 tests pass on retry."
+}

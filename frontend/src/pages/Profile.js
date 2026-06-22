@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { User, Mail, FileText, Calendar, ShoppingBag, Upload, Save, Gamepad2 } from 'lucide-react';
+import { User, Mail, FileText, Calendar, ShoppingBag, Upload, Save, Gamepad2, Lock, KeyRound, ShieldCheck } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -90,6 +90,7 @@ export const Profile = () => {
 
   const tabs = [
     { id: 'profile', label: 'My Profile', icon: User },
+    { id: 'security', label: 'Security', icon: ShieldCheck },
     { id: 'applications', label: 'My Applications', icon: FileText, count: applications.length },
     { id: 'registrations', label: 'My Events', icon: Calendar, count: registrations.length },
     { id: 'orders', label: 'My Orders', icon: ShoppingBag, count: orders.length },
@@ -236,10 +237,11 @@ export const Profile = () => {
                 </div>
                 <div className="md:col-span-2">
                   <label className="font-body text-xs text-text-muted mb-2 block uppercase tracking-wider">
-                    <Mail className="w-3 h-3 inline mr-1" /> Email (cannot be changed)
+                    <Mail className="w-3 h-3 inline mr-1" /> Email
                   </label>
                   <input type="email" value={user.email} disabled
                     className="w-full bg-darknet-terminal border border-border-DEFAULT px-3 py-2 font-body text-sm text-text-muted opacity-60 cursor-not-allowed" />
+                  <p className="font-body text-[10px] text-text-muted mt-1">Change email in the Security tab.</p>
                 </div>
               </div>
 
@@ -250,6 +252,11 @@ export const Profile = () => {
               </button>
             </form>
           </motion.div>
+        )}
+
+        {/* Security tab */}
+        {activeTab === 'security' && (
+          <SecurityTab user={user} />
         )}
 
         {/* Applications tab */}
@@ -322,3 +329,152 @@ export const Profile = () => {
     </div>
   );
 };
+
+// =============== SECURITY TAB ===============
+const SecurityTab = ({ user }) => {
+  const { checkAuth, logout } = useAuth();
+  const [pwForm, setPwForm] = useState({ current_password: '', new_password: '', confirm: '' });
+  const [pwMsg, setPwMsg] = useState({ type: '', text: '' });
+  const [pwSaving, setPwSaving] = useState(false);
+
+  const [emForm, setEmForm] = useState({ current_password: '', new_email: '' });
+  const [emMsg, setEmMsg] = useState({ type: '', text: '' });
+  const [emSaving, setEmSaving] = useState(false);
+
+  const submitPassword = async (e) => {
+    e.preventDefault();
+    setPwMsg({ type: '', text: '' });
+    if (pwForm.new_password !== pwForm.confirm) {
+      setPwMsg({ type: 'error', text: 'New password and confirmation do not match' });
+      return;
+    }
+    if (pwForm.new_password.length < 6) {
+      setPwMsg({ type: 'error', text: 'New password must be at least 6 characters' });
+      return;
+    }
+    setPwSaving(true);
+    try {
+      await axios.put(`${API}/auth/password`, {
+        current_password: pwForm.current_password,
+        new_password: pwForm.new_password,
+      }, { withCredentials: true });
+      setPwMsg({ type: 'success', text: 'Password changed successfully!' });
+      setPwForm({ current_password: '', new_password: '', confirm: '' });
+    } catch (err) {
+      setPwMsg({ type: 'error', text: err.response?.data?.detail || 'Failed to change password' });
+    } finally {
+      setPwSaving(false);
+    }
+  };
+
+  const submitEmail = async (e) => {
+    e.preventDefault();
+    setEmMsg({ type: '', text: '' });
+    setEmSaving(true);
+    try {
+      await axios.put(`${API}/auth/email`, emForm, { withCredentials: true });
+      setEmMsg({ type: 'success', text: 'Email changed! Please log in again with your new email.' });
+      setEmForm({ current_password: '', new_email: '' });
+      setTimeout(async () => {
+        await logout();
+      }, 2500);
+    } catch (err) {
+      setEmMsg({ type: 'error', text: err.response?.data?.detail || 'Failed to change email' });
+    } finally {
+      setEmSaving(false);
+    }
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6" data-testid="security-tab-content">
+      {/* Change password */}
+      <div className="bg-darknet-surface border border-neon-purple/50 p-6 border-glow-purple">
+        <h2 className="font-heading text-lg font-bold text-neon-purple uppercase tracking-tight mb-4 flex items-center gap-2">
+          <Lock className="w-4 h-4" /> Change Password
+        </h2>
+
+        {pwMsg.text && (
+          <div className={`p-3 mb-4 border font-body text-sm ${
+            pwMsg.type === 'success' ? 'border-neon-blue text-neon-blue bg-neon-blue/10' : 'border-neon-red text-neon-red bg-neon-red/10'
+          }`} data-testid="password-message">
+            {pwMsg.text}
+          </div>
+        )}
+
+        <form onSubmit={submitPassword} className="space-y-3">
+          <div>
+            <label className="font-body text-xs text-text-muted mb-1 block uppercase tracking-wider">Current Password</label>
+            <input type="password" required value={pwForm.current_password}
+              onChange={(e) => setPwForm({ ...pwForm, current_password: e.target.value })}
+              data-testid="current-password-input"
+              className="w-full bg-darknet-terminal border border-border-DEFAULT px-3 py-2 font-body text-sm text-white focus:border-neon-blue focus:outline-none" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="font-body text-xs text-text-muted mb-1 block uppercase tracking-wider">New Password</label>
+              <input type="password" required minLength={6} value={pwForm.new_password}
+                onChange={(e) => setPwForm({ ...pwForm, new_password: e.target.value })}
+                data-testid="new-password-input"
+                className="w-full bg-darknet-terminal border border-border-DEFAULT px-3 py-2 font-body text-sm text-white focus:border-neon-blue focus:outline-none" />
+            </div>
+            <div>
+              <label className="font-body text-xs text-text-muted mb-1 block uppercase tracking-wider">Confirm New Password</label>
+              <input type="password" required value={pwForm.confirm}
+                onChange={(e) => setPwForm({ ...pwForm, confirm: e.target.value })}
+                data-testid="confirm-password-input"
+                className="w-full bg-darknet-terminal border border-border-DEFAULT px-3 py-2 font-body text-sm text-white focus:border-neon-blue focus:outline-none" />
+            </div>
+          </div>
+          <button type="submit" disabled={pwSaving} data-testid="change-password-btn"
+            className="px-6 py-2 bg-neon-purple border border-neon-purple text-white font-heading text-xs tracking-wider uppercase hover:shadow-[0_0_15px_rgba(176,38,255,0.5)] transition-all disabled:opacity-50 flex items-center gap-2">
+            <KeyRound className="w-3 h-3" />
+            {pwSaving ? 'Saving...' : 'Change Password'}
+          </button>
+        </form>
+      </div>
+
+      {/* Change email */}
+      <div className="bg-darknet-surface border border-neon-blue/50 p-6 border-glow-blue">
+        <h2 className="font-heading text-lg font-bold text-neon-blue uppercase tracking-tight mb-4 flex items-center gap-2">
+          <Mail className="w-4 h-4" /> Change Email
+        </h2>
+
+        <p className="font-body text-xs text-text-muted mb-4">Current email: <span className="text-neon-blue">{user.email}</span></p>
+
+        {emMsg.text && (
+          <div className={`p-3 mb-4 border font-body text-sm ${
+            emMsg.type === 'success' ? 'border-neon-blue text-neon-blue bg-neon-blue/10' : 'border-neon-red text-neon-red bg-neon-red/10'
+          }`} data-testid="email-message">
+            {emMsg.text}
+          </div>
+        )}
+
+        <form onSubmit={submitEmail} className="space-y-3">
+          <div>
+            <label className="font-body text-xs text-text-muted mb-1 block uppercase tracking-wider">Current Password</label>
+            <input type="password" required value={emForm.current_password}
+              onChange={(e) => setEmForm({ ...emForm, current_password: e.target.value })}
+              data-testid="email-current-password-input"
+              className="w-full bg-darknet-terminal border border-border-DEFAULT px-3 py-2 font-body text-sm text-white focus:border-neon-blue focus:outline-none" />
+          </div>
+          <div>
+            <label className="font-body text-xs text-text-muted mb-1 block uppercase tracking-wider">New Email</label>
+            <input type="email" required value={emForm.new_email}
+              onChange={(e) => setEmForm({ ...emForm, new_email: e.target.value })}
+              data-testid="new-email-input"
+              className="w-full bg-darknet-terminal border border-border-DEFAULT px-3 py-2 font-body text-sm text-white focus:border-neon-blue focus:outline-none" />
+          </div>
+          <button type="submit" disabled={emSaving} data-testid="change-email-btn"
+            className="px-6 py-2 bg-neon-blue border border-neon-blue text-darknet-terminal font-heading text-xs tracking-wider uppercase hover:shadow-[0_0_15px_rgba(0,229,255,0.5)] transition-all disabled:opacity-50 flex items-center gap-2">
+            <Mail className="w-3 h-3" />
+            {emSaving ? 'Saving...' : 'Change Email'}
+          </button>
+          <p className="font-body text-[10px] text-text-muted mt-1">
+            You will be logged out after changing your email.
+          </p>
+        </form>
+      </div>
+    </motion.div>
+  );
+};
+

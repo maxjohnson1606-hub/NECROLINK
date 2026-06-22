@@ -349,7 +349,7 @@ const ProductsTab = () => {
   const [products, setProducts] = useState([]);
   const [editing, setEditing] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const initialForm = { name: '', description: '', price: 0, category: 'jersey', section: 'merchandise', image_url: '', is_active: true, stock: '' };
+  const initialForm = { name: '', description: '', price: 0, category: 'diamonds', section: 'topup', image_url: '', is_active: true, stock: '' };
   const [form, setForm] = useState(initialForm);
 
   const fetchProducts = async () => {
