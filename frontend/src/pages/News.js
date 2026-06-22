@@ -100,27 +100,37 @@ const VideoCard = ({ video, index, onPlay }) => (
   </motion.div>
 );
 
-const VideoPlayerModal = ({ video, onClose }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-sm p-4" onClick={onClose} data-testid="video-modal">
-    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-4xl" onClick={(e) => e.stopPropagation()}>
-      <div className="aspect-video bg-black">
-        <iframe
-          className="w-full h-full"
-          src={`https://www.youtube.com/embed/${video.video_id}?autoplay=1`}
-          title={video.title}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-        />
-      </div>
-      <div className="bg-darknet-surface border border-neon-red/50 p-4 mt-2">
-        <h3 className="font-heading text-lg font-bold text-white mb-1">{video.title}</h3>
-        <a href={video.url} target="_blank" rel="noopener noreferrer" className="font-body text-xs text-neon-blue hover:text-neon-purple inline-flex items-center gap-1">
-          Watch on YouTube <ExternalLink className="w-3 h-3" />
-        </a>
-      </div>
-    </motion.div>
-  </div>
-);
+const VideoPlayerModal = ({ video, onClose }) => {
+  const [iframeError, setIframeError] = useState(false);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-sm p-4" onClick={onClose} data-testid="video-modal">
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-4xl" onClick={(e) => e.stopPropagation()}>
+        <div className="aspect-video bg-black relative">
+          <iframe
+            className="w-full h-full"
+            src={`https://www.youtube.com/embed/${video.video_id}?autoplay=1`}
+            title={video.title}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            onError={() => setIframeError(true)}
+          />
+        </div>
+        <div className="bg-darknet-surface border border-neon-red/50 p-4 mt-2">
+          <h3 className="font-heading text-lg font-bold text-white mb-2">{video.title}</h3>
+          <div className="flex items-center gap-3 flex-wrap">
+            <a href={video.url} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-neon-red border border-neon-red text-white font-body text-xs uppercase tracking-wider hover:shadow-[0_0_15px_rgba(255,0,60,0.5)] transition-all"
+              data-testid="open-on-youtube-btn">
+              <Youtube className="w-4 h-4" /> Open on YouTube
+            </a>
+            {iframeError && <span className="font-body text-xs text-text-muted">If video doesn&apos;t load, watch on YouTube directly.</span>}
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
 
 export const News = () => {
   const [news, setNews] = useState([]);
