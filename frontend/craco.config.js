@@ -61,40 +61,55 @@ let webpackConfig = {
 };
 
 webpackConfig.devServer = (devServerConfig) => {
-  // Add health check endpoints if enabled
-  if (config.enableHealthCheck && setupHealthEndpoints && healthPluginInstance) {
-    const originalSetupMiddlewares = devServerConfig.setupMiddlewares;
+  // Migrate deprecated webpack-dev-server middleware APIs to new setupMiddlewares
+  const beforeSetup = devServerConfig.onBeforeSetupMiddleware;
+  const afterSetup = devServerConfig.onAfterSetupMiddleware;
+  delete devServerConfig.onBeforeSetupMiddleware;
+  delete devServerConfig.onAfterSetupMiddleware;
 
-    devServerConfig.setupMiddlewares = (middlewares, devServer) => {
-      // Call original setup if exists
-      if (originalSetupMiddlewares) {
-        middlewares = originalSetupMiddlewares(middlewares, devServer);
-      }
-
-      // Setup health endpoints
-      setupHealthEndpoints(devServer, healthPluginInstance);
-
-      return middlewares;
-    };
+  // Migrate deprecated 'https' option to 'server'
+  if (devServerConfig.https !== undefined) {
+    devServerConfig.server = devServerConfig.https ? "https" : "http";
+    delete devServerConfig.https;
   }
+
+  const originalSetupMiddlewares = devServerConfig.setupMiddlewares;
+  devServerConfig.setupMiddlewares = (middlewares, devServer) => {
+    if (beforeSetup) beforeSetup(devServer);
+    if (originalSetupMiddlewares) {
+      middlewares = originalSetupMiddlewares(middlewares, devServer);
+    }
+    if (afterSetup) afterSetup(devServer);
+
+    // Setup health endpoints if enabled
+    if (config.enableHealthCheck && setupHealthEndpoints && healthPluginInstance) {
+      setupHealthEndpoints(devServer, healthPluginInstance);
+    }
+
+    return middlewares;
+  };
+
+  // Allow preview host
+  devServerConfig.allowedHosts = "all";
 
   return devServerConfig;
 };
 
 // Wrap with visual edits (automatically adds babel plugin, dev server, and overlay in dev mode)
-if (isDevServer) {
-  try {
-    const { withVisualEdits } = require("@emergentbase/visual-edits/craco");
-    webpackConfig = withVisualEdits(webpackConfig);
-  } catch (err) {
-    if (err.code === 'MODULE_NOT_FOUND' && err.message.includes('@emergentbase/visual-edits/craco')) {
-      console.warn(
-        "[visual-edits] @emergentbase/visual-edits not installed — visual editing disabled."
-      );
-    } else {
-      throw err;
-    }
-  }
-}
+// Temporarily disabled due to webpack-dev-server v5 compatibility issues
+// if (isDevServer) {
+//   try {
+//     const { withVisualEdits } = require("@emergentbase/visual-edits/craco");
+//     webpackConfig = withVisualEdits(webpackConfig);
+//   } catch (err) {
+//     if (err.code === 'MODULE_NOT_FOUND' && err.message.includes('@emergentbase/visual-edits/craco')) {
+//       console.warn(
+//         "[visual-edits] @emergentbase/visual-edits not installed — visual editing disabled."
+//       );
+//     } else {
+//       throw err;
+//     }
+//   }
+// }
 
 module.exports = webpackConfig;

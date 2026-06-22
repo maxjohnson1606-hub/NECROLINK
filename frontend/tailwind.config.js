@@ -1,18 +1,39 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-    darkMode: ["class"],
-    content: [
+  darkMode: ["class"],
+  content: [
     "./src/**/*.{js,jsx,ts,tsx}",
     "./public/index.html"
   ],
   theme: {
     extend: {
-      borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)'
+      fontFamily: {
+        heading: ["'Unbounded'", "sans-serif"],
+        body: ["'JetBrains Mono'", "monospace"],
       },
       colors: {
+        darknet: {
+          bg: "#05050A",
+          surface: "#0D0D14",
+          elevated: "#15151F",
+          terminal: "#000000",
+        },
+        neon: {
+          blue: "#00E5FF",
+          purple: "#B026FF",
+          red: "#FF003C",
+        },
+        text: {
+          primary: "#FFFFFF",
+          secondary: "#A0A0B0",
+          muted: "#606070",
+        },
+        border: {
+          DEFAULT: "#1A1A2A",
+          glow: "rgba(0, 229, 255, 0.3)",
+          'glow-purple': "rgba(176, 38, 255, 0.3)",
+          'glow-red': "rgba(255, 0, 60, 0.3)",
+        },
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
         card: {
@@ -46,36 +67,26 @@ module.exports = {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
-        chart: {
-          '1': 'hsl(var(--chart-1))',
-          '2': 'hsl(var(--chart-2))',
-          '3': 'hsl(var(--chart-3))',
-          '4': 'hsl(var(--chart-4))',
-          '5': 'hsl(var(--chart-5))'
-        }
       },
-      keyframes: {
-        'accordion-down': {
-          from: {
-            height: '0'
-          },
-          to: {
-            height: 'var(--radix-accordion-content-height)'
-          }
-        },
-        'accordion-up': {
-          from: {
-            height: 'var(--radix-accordion-content-height)'
-          },
-          to: {
-            height: '0'
-          }
-        }
+      borderRadius: {
+        lg: 'var(--radius)',
+        md: 'calc(var(--radius) - 2px)',
+        sm: 'calc(var(--radius) - 4px)'
       },
       animation: {
-        'accordion-down': 'accordion-down 0.2s ease-out',
-        'accordion-up': 'accordion-up 0.2s ease-out'
-      }
+        'glow-pulse': 'glow-pulse 2s ease-in-out infinite',
+        'float': 'float 3s ease-in-out infinite',
+      },
+      keyframes: {
+        'glow-pulse': {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.5' },
+        },
+        'float': {
+          '0%, 100%': { transform: 'translateY(0px)' },
+          '50%': { transform: 'translateY(-10px)' },
+        },
+      },
     }
   },
   plugins: [require("tailwindcss-animate")],
