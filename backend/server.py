@@ -173,8 +173,14 @@ async def get_current_user(request: Request) -> dict:
 
 async def get_admin_user(request: Request) -> dict:
     user = await get_current_user(request)
-    if user.get("role") != "admin":
+    if user.get("role") not in ("admin", "owner"):
         raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+async def get_owner_user(request: Request) -> dict:
+    user = await get_current_user(request)
+    if user.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Owner access required")
     return user
 
 def parse_object_id(id_str: str, resource_name: str = "Resource") -> ObjectId:
@@ -269,6 +275,22 @@ class OrderRequest(BaseModel):
     game_id: Optional[str] = None  # For top-up: MLBB ID
     server_id: Optional[str] = None  # For top-up: MLBB server ID
     notes: Optional[str] = None
+
+class ProfileUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    game_name: Optional[str] = None
+    preferred_role: Optional[str] = None
+    avatar_url: Optional[str] = None
+    bio: Optional[str] = None
+
+class GalleryItemRequest(BaseModel):
+    title: str
+    description: Optional[str] = None
+    image_url: str
+    category: str = "match"  # match, mvp, team, event
+
+class UserRoleRequest(BaseModel):
+    role: str  # member, admin, owner
 
 # ============ AUTH ROUTES ============
 @api_router.post("/auth/login")
@@ -638,6 +660,102 @@ async def update_order_status(order_id: str, status: str, request: Request):
     return {"message": "Order status updated"}
 
 # ============ STATISTICS ============
+
+# ============ USER PROFILE & MY DATA ============
+@api_router.patch("/auth/profile")
+async def update_profile(profile: ProfileUpdateRequest, request: Request):
+    user = await get_current_user(request)
+    update_data = {k: v for k, v in profile.model_dump().items() if v is not None}
+    if update_data:
+        update_data["updated_at"] = datetime.now(timezone.utc)
+        await db.users.update_one({"_id": ObjectId(user["_id"])}, {"$set": update_data})
+    updated = await db.users.find_one({"_id": ObjectId(user["_id"])})
+    updated["_id"] = str(updated["_id"])
+    updated.pop("password_hash", None)
+    return updated
+
+@api_router.get("/me/applications")
+async def get_my_applications(request: Request):
+    user = await get_current_user(request)
+    apps = await db.applications.find({"email": user["email"].lower()}, {"_id": 0}).sort("submitted_at", -1).to_list(50)
+    return apps
+
+@api_router.get("/me/registrations")
+async def get_my_registrations(request: Request):
+    user = await get_current_user(request)
+    regs = await db.event_registrations.find({"email": user["email"].lower()}).sort("registered_at", -1).to_list(100)
+    for r in regs:
+        r["id"] = str(r.pop("_id"))
+    return regs
+
+@api_router.get("/me/orders")
+async def get_my_orders(request: Request):
+    user = await get_current_user(request)
+    orders = await db.orders.find({"email": user["email"].lower()}).sort("created_at", -1).to_list(100)
+    for o in orders:
+        o["id"] = str(o.pop("_id"))
+    return orders
+
+# ============ GALLERY ============
+@api_router.get("/gallery")
+async def get_gallery(category: Optional[str] = None):
+    query = {}
+    if category:
+        query["category"] = category
+    items = await db.gallery.find(query).sort("created_at", -1).to_list(200)
+    for item in items:
+        item["id"] = str(item.pop("_id"))
+    return items
+
+@api_router.post("/gallery")
+async def create_gallery_item(item: GalleryItemRequest, request: Request):
+    await get_admin_user(request)
+    doc = item.model_dump()
+    doc["created_at"] = datetime.now(timezone.utc)
+    result = await db.gallery.insert_one(doc)
+    return {"id": str(result.inserted_id), "message": "Gallery item created"}
+
+@api_router.delete("/gallery/{item_id}")
+async def delete_gallery_item(item_id: str, request: Request):
+    await get_admin_user(request)
+    result = await db.gallery.delete_one({"_id": parse_object_id(item_id, "Gallery item")})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Gallery item not found")
+    return {"message": "Gallery item deleted"}
+
+# ============ OWNER-ONLY USER MANAGEMENT ============
+@api_router.get("/users")
+async def get_users(request: Request):
+    await get_owner_user(request)
+    users = await db.users.find({}, {"password_hash": 0}).to_list(500)
+    for u in users:
+        u["id"] = str(u.pop("_id"))
+    return users
+
+@api_router.patch("/users/{user_id}/role")
+async def update_user_role(user_id: str, role_req: UserRoleRequest, request: Request):
+    owner = await get_owner_user(request)
+    if role_req.role not in ("member", "admin", "owner"):
+        raise HTTPException(status_code=400, detail="Invalid role")
+    uid = parse_object_id(user_id, "User")
+    if str(uid) == owner["_id"]:
+        raise HTTPException(status_code=400, detail="Cannot change your own role")
+    result = await db.users.update_one({"_id": uid}, {"$set": {"role": role_req.role}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"message": "Role updated"}
+
+@api_router.delete("/users/{user_id}")
+async def delete_user(user_id: str, request: Request):
+    owner = await get_owner_user(request)
+    uid = parse_object_id(user_id, "User")
+    if str(uid) == owner["_id"]:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+    result = await db.users.delete_one({"_id": uid})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"message": "User deleted"}
+
 @api_router.get("/stats")
 async def get_stats(request: Request):
     await get_admin_user(request)
@@ -659,6 +777,22 @@ async def get_stats(request: Request):
 
 # ============ ADMIN SEEDING ============
 async def seed_admin():
+    # Seed owner
+    owner_email = "owner@necrolink.com"
+    owner_password = "Owner2024!"
+    existing_owner = await db.users.find_one({"email": owner_email})
+    if existing_owner is None:
+        await db.users.insert_one({
+            "email": owner_email, "password_hash": hash_password(owner_password),
+            "name": "Owner", "role": "owner", "created_at": datetime.now(timezone.utc)
+        })
+        logger.info(f"Owner user created: {owner_email}")
+    elif not verify_password(owner_password, existing_owner["password_hash"]):
+        await db.users.update_one({"email": owner_email}, {"$set": {"password_hash": hash_password(owner_password), "role": "owner"}})
+    else:
+        # Make sure role is owner
+        await db.users.update_one({"email": owner_email}, {"$set": {"role": "owner"}})
+
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@necrolink.com")
     admin_password = os.environ.get("ADMIN_PASSWORD", "Necrolink2024!")
     existing = await db.users.find_one({"email": admin_email})
@@ -679,19 +813,52 @@ async def seed_admin():
     
     os.makedirs("/app/memory", exist_ok=True)
     with open("/app/memory/test_credentials.md", "w") as f:
-        f.write(f"# NECROLINK Test Credentials\n\n## Admin Account\n- Email: {admin_email}\n- Password: {admin_password}\n- Role: admin\n\n")
+        f.write("# NECROLINK Test Credentials\n\n")
+        f.write("## Owner Account (full control)\n")
+        f.write(f"- Email: {owner_email}\n")
+        f.write(f"- Password: {owner_password}\n")
+        f.write("- Role: owner (highest privilege - can manage admins)\n\n")
+        f.write("## Admin Account\n")
+        f.write(f"- Email: {admin_email}\n")
+        f.write(f"- Password: {admin_password}\n")
+        f.write("- Role: admin\n\n")
         f.write("## Legacy Admin (still works)\n- Email: admin@darknet.com\n- Password: DarkNet2024!\n\n")
-        f.write("## Endpoints\n- /api/auth/login, /api/auth/register, /api/auth/me, /api/auth/logout\n- /api/events, /api/news, /api/products, /api/orders\n- /api/event-registrations, /api/applications, /api/announcements, /api/members\n- /api/upload, /api/files/{path}, /api/stats\n")
+        f.write("## Endpoints\n- /api/auth/login, /api/auth/register, /api/auth/me, /api/auth/logout, /api/auth/profile\n")
+        f.write("- /api/me/applications, /api/me/registrations, /api/me/orders\n")
+        f.write("- /api/events, /api/news, /api/products, /api/orders, /api/gallery\n")
+        f.write("- /api/event-registrations, /api/applications, /api/announcements, /api/members\n")
+        f.write("- /api/upload, /api/files/{path}, /api/stats\n")
+        f.write("- (owner only) /api/users, /api/users/{id}/role, /api/users/{id}\n")
 
 async def seed_initial_data():
-    # Members
+    # Members - update leader avatar to Aamon poster
+    LEADER_POSTER = "https://customer-assets.emergentagent.com/job_voltage-victory/artifacts/qk6p9s84_ChatGPT%20Image%2022%20%D0%B8%D1%8E%D0%BD.%202026%20%D0%B3.%2C%2017_40_45.png"
+    # Update existing leader to Aamon (matches poster: 236 matches, 72% WR, 68 MVPs, KDA 8.2)
+    await db.members.update_one(
+        {"is_leader": True},
+        {"$set": {
+            "avatar_url": LEADER_POSTER,
+            "name": "Aamon",
+            "game_name": "NECROLINK_Aamon",
+            "role": "Jungle",
+            "rank": "Leader",
+            "wins": 236,
+            "mvp_count": 68,
+            "achievements": ["The Duke of Shadows", "Win Rate 72%", "KDA 8.2", "Silent Shadow Deadly"]
+        }}
+    )
+    # Fix legacy game_name for co-leader
+    await db.members.update_one(
+        {"game_name": "DarkNet_Phantom"},
+        {"$set": {"game_name": "NECROLINK_Phantom"}}
+    )
     if await db.members.count_documents({}) == 0:
         await db.members.insert_many([
             {
-                "name": "Shadow Leader", "game_name": "NECROLINK_Shadow", "role": "Tank",
-                "rank": "Leader", "achievements": ["MVP Season 23", "Tournament Champion"],
-                "wins": 1247, "mvp_count": 89,
-                "avatar_url": "https://images.pexels.com/photos/7773546/pexels-photo-7773546.jpeg?auto=compress&cs=tinysrgb&w=400",
+                "name": "Aamon", "game_name": "NECROLINK_Aamon", "role": "Jungle",
+                "rank": "Leader", "achievements": ["The Duke of Shadows", "MVP x68", "Tournament Champion"],
+                "wins": 236, "mvp_count": 68,
+                "avatar_url": LEADER_POSTER,
                 "is_leader": True, "is_co_leader": False, "created_at": datetime.now(timezone.utc)
             },
             {
@@ -782,6 +949,20 @@ async def seed_initial_data():
              "created_at": datetime.now(timezone.utc)},
             {"name": "Starlight Membership", "description": "Monthly Starlight with exclusive skins", "price": 4.99,
              "category": "starlight", "section": "topup", "is_active": True,
+             "created_at": datetime.now(timezone.utc)},
+        ])
+
+    # Gallery seed
+    if await db.gallery.count_documents({}) == 0:
+        await db.gallery.insert_many([
+            {"title": "Tournament Victory", "description": "NECROLINK clinches the weekend custom matches", "category": "match",
+             "image_url": "https://images.pexels.com/photos/7862505/pexels-photo-7862505.jpeg?auto=compress&cs=tinysrgb&w=940",
+             "created_at": datetime.now(timezone.utc)},
+            {"title": "MVP Moment - Aamon Triple Kill", "description": "The Duke of Shadows strikes again", "category": "mvp",
+             "image_url": "https://images.pexels.com/photos/9072394/pexels-photo-9072394.jpeg?auto=compress&cs=tinysrgb&w=940",
+             "created_at": datetime.now(timezone.utc)},
+            {"title": "Squad Lineup", "description": "The full NECROLINK team", "category": "team",
+             "image_url": "https://images.pexels.com/photos/17195067/pexels-photo-17195067.jpeg?auto=compress&cs=tinysrgb&w=940",
              "created_at": datetime.now(timezone.utc)},
         ])
 

@@ -12,6 +12,8 @@ import { Login } from './pages/Login';
 import { Events } from './pages/Events';
 import { News } from './pages/News';
 import { Store } from './pages/Store';
+import { Gallery } from './pages/Gallery';
+import { Profile } from './pages/Profile';
 import { AdminDashboard } from './pages/AdminDashboard';
 import '@/App.css';
 
@@ -28,9 +30,18 @@ function App() {
               <Route path="/members" element={<Members />} />
               <Route path="/events" element={<Events />} />
               <Route path="/news" element={<News />} />
+              <Route path="/gallery" element={<Gallery />} />
               <Route path="/store" element={<Store />} />
               <Route path="/join" element={<JoinUs />} />
               <Route path="/login" element={<Login />} />
+              <Route
+                path="/profile"
+                element={
+                  <ProtectedRoute>
+                    <Profile />
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="/admin"
                 element={

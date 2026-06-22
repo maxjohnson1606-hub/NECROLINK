@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Skull, Trophy, Users, Calendar } from 'lucide-react';
+import { Trophy, Users, Calendar } from 'lucide-react';
 import axios from 'axios';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -41,9 +41,12 @@ export const Home = () => {
             transition={{ duration: 0.8 }}
           >
             <div className="mb-6 flex justify-center">
-              <div className="w-24 h-24 bg-darknet-terminal border-2 border-neon-purple flex items-center justify-center border-glow-purple animate-float">
-                <Skull className="w-12 h-12 text-neon-purple" />
-              </div>
+              <img
+                src="https://customer-assets.emergentagent.com/job_voltage-victory/artifacts/rkylk165_ChatGPT%20Image%2021%20%D0%B8%D1%8E%D0%BD.%202026%20%D0%B3.%2C%2022_12_30.png"
+                alt="NECROLINK"
+                className="w-40 h-40 sm:w-52 sm:h-52 object-contain animate-float"
+                data-testid="hero-logo"
+              />
             </div>
             
             <h1 className="font-heading text-5xl sm:text-6xl md:text-7xl font-black tracking-tighter uppercase mb-6 neon-glow-purple" data-testid="hero-title">

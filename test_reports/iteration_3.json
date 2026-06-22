@@ -1,0 +1,49 @@
+{
+  "summary": "Iteration 3 testing of Owner role, Profile page, Gallery feature, Aamon leader, and rebrand. Backend: 23/23 NEW iter3 tests passed + 34/34 iter2 regression = 57/57 total (100%). Frontend: All 31 UI checks passed across navbar logo, hero logo, footer links (Instagram/email/Telegram), Gallery page (3 seeded items, category filters, lightbox), Members page (Aamon leader with 236 wins/68 MVPs/Duke of Shadows, NECROLINK_Phantom co-leader, no DarkNet_Phantom), owner login flow, Profile page (4 tabs, edit+save persists, avatar), Admin dashboard (Gallery tab + new-gallery-btn, owner-only Users tab with 7 users + role selects + delete btns). No critical bugs.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/auth/register", "issue": "Email is lower-cased on register but not on login - login does NOT lowercase email (line ~298). Mixed-case email at login could fail when DB stored lowercase. Recommend normalizing to .lower() in login as well."},
+      {"endpoint": "/api/users (PATCH role)", "issue": "Only validates role enum (member/admin/owner) but allows owner to demote another owner. If there were multiple owners, one could remove all others. Currently only 1 owner seeded so low risk."},
+      {"endpoint": "/api/me/orders, /api/me/registrations", "issue": "Filter by email is case-sensitive in Mongo. If user registers/orders with different-case email vs login email, /me/* will not return those records. Consider normalizing emails on insert and query."},
+      {"endpoint": "/api/auth/login", "issue": "(Carry-over from iter1/2) Still no brute-force lockout per playbook."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin Users tab", "issues": ["Owner's own row has no role-select or delete button (correct by design), but no visual indicator like 'You' or 'Cannot modify' - minor UX nit."]},
+      {"screen": "Admin Events form (carry-over)", "issues": ["Still uses native datetime-local picker instead of shadcn Calendar."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter3_owner_gallery.py",
+    "/app/backend/tests/test_necrolink_api.py",
+    "/app/test_reports/pytest/iter3.xml"
+  ],
+  "action_items": [
+    "Normalize email to lower-case in /api/auth/login (server.py ~line 298) to match register behavior - prevents login failures for users who type mixed-case email.",
+    "Normalize email on event-registrations/orders insert (or query with case-insensitive regex) so /api/me/* returns all records regardless of email case.",
+    "(Carry-over) Implement brute-force lockout on /api/auth/login per playbook.",
+    "(Carry-over from iter2) Add data-testid='tab-overview' on Overview tab in AdminDashboard.",
+    "(Minor) Refactor server.py (993 lines) into modules - it has grown again from 804 to 993 lines."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now 993 lines (was 804 in iter2, 491 in iter1) - urgently needs splitting into route modules (routes_users.py, routes_gallery.py, routes_me.py, routes_profile.py, services/auth.py, seed.py).",
+    "Login does not lower-case email but register does - asymmetric handling can cause real login bugs. Apply email.lower() consistently.",
+    "Role enum check in PATCH /users/{id}/role is duplicated string list - extract to a Literal type or constant.",
+    "/api/users endpoint returns role/email but does not exclude password_hash explicitly in projection - currently safe because parse_user serializer drops it, but a future bug could leak it. Use explicit Mongo projection {password_hash:0}.",
+    "Avatar upload via client-side FileReader -> data URL is stored directly in DB (potentially large base64 strings). Should set a reasonable file-size limit (e.g., 200KB) on the client and reject larger uploads with a toast."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter3_owner_gallery.py (NEW - 23 tests covering owner role, /api/users, /api/auth/profile, /api/me/*, /api/gallery, Aamon leader, co-leader rename)"
+  ],
+  "success_rate": {"backend": "100% (57/57 - 23 new + 34 regression)", "frontend": "100% (31/31 UI checks)"},
+  "test_credentials": "Owner: owner@necrolink.com / Owner2024! VERIFIED. Admin: admin@necrolink.com / Necrolink2024! VERIFIED. Legacy: admin@darknet.com / DarkNet2024! VERIFIED (iter2).",
+  "seed_data_creation": "Verified seeds: 1 owner + 2 admins + Aamon leader (236 wins, 68 MVPs, The Duke of Shadows achievement, NECROLINK_Aamon IGN) + Cyber Phantom co-leader (NECROLINK_Phantom IGN, NOT old DarkNet_Phantom) + 3 gallery items (match/mvp/team categories). All test-created data cleaned up after run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression suites: /app/backend/tests/test_necrolink_api.py (34 tests - iter2 features) + /app/backend/tests/test_iter3_owner_gallery.py (23 tests - iter3 owner/gallery/profile/me). Run both: REACT_APP_BACKEND_URL=https://voltage-victory.preview.emergentagent.com pytest /app/backend/tests/ -v. New iter3 data-testids verified: hero-logo, footer-instagram, footer-email, footer-telegram, gallery-title, gallery-filter-{all,match,mvp,team,event}, gallery-item-{id}, gallery-lightbox, profile-tab-{profile,applications,registrations,orders}, profile-avatar, profile-name-input, save-profile-btn, tab-gallery, tab-users, new-gallery-btn, admin-user-{id}, role-select-{id}, delete-user-{id}. Owner cannot self-modify (no role-select/delete-btn on own row - correct). Server.py grew to 993 lines.",
+  "rca_of_the_issue": "N/A - no critical bugs. 4 minor backend test failures during initial run were due to test-side issues (email case mismatch with server's .lower() on register, members field naming convention 'rank' vs 'role' and 'mvp_count' vs 'mvps'). All fixed and re-passed."
+}

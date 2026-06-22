@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Users, FileText, Megaphone, Plus, Trash2, CheckCircle, XCircle,
-  Calendar, Newspaper, ShoppingBag, BarChart3, Edit, Upload, Package, Pin
+  Calendar, Newspaper, ShoppingBag, BarChart3, Edit, Upload, Package, Pin,
+  Image as ImageIcon, UserCog, Shield
 } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
@@ -688,6 +689,169 @@ const AnnouncementsTab = () => {
 };
 
 // =============== MAIN DASHBOARD ===============
+
+// =============== GALLERY TAB ===============
+const GalleryTab = () => {
+  const [items, setItems] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const initialForm = { title: '', description: '', image_url: '', category: 'match' };
+  const [form, setForm] = useState(initialForm);
+
+  const fetchGallery = async () => {
+    const { data } = await axios.get(`${API}/gallery`);
+    setItems(data);
+  };
+  useEffect(() => { fetchGallery(); }, []);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`${API}/gallery`, form, { withCredentials: true });
+      setForm(initialForm);
+      setShowForm(false);
+      fetchGallery();
+    } catch (err) {
+      alert('Error: ' + (err.response?.data?.detail || err.message));
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this image?')) return;
+    await axios.delete(`${API}/gallery/${id}`, { withCredentials: true });
+    fetchGallery();
+  };
+
+  return (
+    <div data-testid="gallery-tab-content">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="font-heading text-xl font-bold text-neon-purple uppercase">Gallery ({items.length})</h2>
+        <button onClick={() => setShowForm(!showForm)} data-testid="new-gallery-btn"
+          className="flex items-center gap-2 px-4 py-2 bg-neon-purple border border-neon-purple text-white font-body text-xs uppercase tracking-wider">
+          <Plus className="w-4 h-4" /> {showForm ? 'Cancel' : 'Add Image'}
+        </button>
+      </div>
+
+      {showForm && (
+        <form onSubmit={handleSubmit} className="bg-darknet-surface border border-neon-purple/50 p-5 mb-6 space-y-3" data-testid="gallery-form">
+          <input type="text" placeholder="Title *" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })}
+            data-testid="gallery-title-input"
+            className="w-full bg-darknet-terminal border border-border-DEFAULT px-3 py-2 font-body text-sm text-white focus:border-neon-blue focus:outline-none" />
+          <textarea placeholder="Description" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
+            className="w-full bg-darknet-terminal border border-border-DEFAULT px-3 py-2 font-body text-sm text-white focus:border-neon-blue focus:outline-none resize-none" />
+          <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}
+            data-testid="gallery-category-select"
+            className="w-full bg-darknet-terminal border border-border-DEFAULT px-3 py-2 font-body text-sm text-white focus:border-neon-blue focus:outline-none">
+            <option value="match">Match Screenshot</option>
+            <option value="mvp">MVP Moment</option>
+            <option value="team">Team Highlight</option>
+            <option value="event">Event Memory</option>
+          </select>
+          <div>
+            <label className="font-body text-xs text-text-muted mb-1 block uppercase tracking-wider">Image *</label>
+            <ImageUploader value={form.image_url} onChange={(url) => setForm({ ...form, image_url: url })} testId="gallery-image" />
+          </div>
+          <button type="submit" data-testid="save-gallery-btn" className="px-6 py-2 bg-neon-red border border-neon-red text-white font-body text-xs uppercase tracking-wider">
+            Add to Gallery
+          </button>
+        </form>
+      )}
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {items.map((item) => (
+          <div key={item.id} className="bg-darknet-surface border border-border-DEFAULT relative group" data-testid={`admin-gallery-${item.id}`}>
+            <img src={item.image_url} alt={item.title} className="w-full aspect-square object-cover" />
+            <div className="p-2">
+              <p className="font-body text-xs text-white truncate">{item.title}</p>
+              <p className="font-body text-[10px] text-text-muted uppercase">{item.category}</p>
+            </div>
+            <button onClick={() => handleDelete(item.id)} data-testid={`delete-gallery-${item.id}`}
+              className="absolute top-1 right-1 p-1 bg-black/70 text-neon-red opacity-0 group-hover:opacity-100 transition-opacity">
+              <Trash2 className="w-3 h-3" />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// =============== USERS TAB (OWNER ONLY) ===============
+const UsersTab = () => {
+  const [users, setUsers] = useState([]);
+  const { user: currentUser } = useAuth();
+
+  const fetchUsers = async () => {
+    try {
+      const { data } = await axios.get(`${API}/users`, { withCredentials: true });
+      setUsers(data);
+    } catch (e) { console.error(e); }
+  };
+  useEffect(() => { fetchUsers(); }, []);
+
+  const updateRole = async (id, role) => {
+    try {
+      await axios.patch(`${API}/users/${id}/role`, { role }, { withCredentials: true });
+      fetchUsers();
+    } catch (err) {
+      alert('Error: ' + (err.response?.data?.detail || err.message));
+    }
+  };
+
+  const deleteUser = async (id) => {
+    if (!window.confirm('Permanently delete this user?')) return;
+    try {
+      await axios.delete(`${API}/users/${id}`, { withCredentials: true });
+      fetchUsers();
+    } catch (err) {
+      alert('Error: ' + (err.response?.data?.detail || err.message));
+    }
+  };
+
+  return (
+    <div data-testid="users-tab-content">
+      <h2 className="font-heading text-xl font-bold text-neon-red uppercase mb-6 flex items-center gap-2">
+        <Shield className="w-5 h-5" /> User Management ({users.length})
+      </h2>
+      <div className="space-y-3">
+        {users.map((u) => (
+          <div key={u.id} className="bg-darknet-surface border border-border-DEFAULT p-4 flex items-center justify-between gap-3" data-testid={`admin-user-${u.id}`}>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="font-heading text-sm font-bold text-white uppercase">{u.name || 'Unnamed'}</h3>
+                <span className={`px-2 py-0.5 text-[10px] font-body uppercase tracking-wider border ${
+                  u.role === 'owner' ? 'border-neon-red text-neon-red' :
+                  u.role === 'admin' ? 'border-neon-purple text-neon-purple' :
+                  'border-neon-blue text-neon-blue'
+                }`}>{u.role}</span>
+              </div>
+              <p className="font-body text-xs text-text-secondary">{u.email}</p>
+              {u.game_name && <p className="font-body text-[10px] text-text-muted">IGN: {u.game_name}</p>}
+            </div>
+            {u.id !== currentUser?._id && (
+              <div className="flex items-center gap-2">
+                <select
+                  value={u.role}
+                  onChange={(e) => updateRole(u.id, e.target.value)}
+                  data-testid={`role-select-${u.id}`}
+                  className="bg-darknet-terminal border border-border-DEFAULT px-2 py-1 font-body text-xs text-white focus:border-neon-blue focus:outline-none"
+                >
+                  <option value="member">Member</option>
+                  <option value="admin">Admin</option>
+                  <option value="owner">Owner</option>
+                </select>
+                <button onClick={() => deleteUser(u.id)} data-testid={`delete-user-${u.id}`} className="p-2 text-neon-red hover:bg-neon-red/10">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// =============== MAIN DASHBOARD ===============
 export const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('stats');
   const [stats, setStats] = useState(null);
@@ -709,10 +873,12 @@ export const AdminDashboard = () => {
     { id: 'events', label: 'Events', icon: Calendar },
     { id: 'registrations', label: 'Registrations', icon: Users },
     { id: 'news', label: 'News', icon: Newspaper },
+    { id: 'gallery', label: 'Gallery', icon: ImageIcon },
     { id: 'products', label: 'Products', icon: ShoppingBag },
     { id: 'orders', label: 'Orders', icon: Package },
     { id: 'applications', label: 'Applications', icon: FileText },
     { id: 'announcements', label: 'Announcements', icon: Megaphone },
+    ...(user?.role === 'owner' ? [{ id: 'users', label: 'Users', icon: UserCog }] : []),
   ];
 
   const statCards = stats ? [
@@ -782,10 +948,12 @@ export const AdminDashboard = () => {
           {activeTab === 'events' && <EventsTab />}
           {activeTab === 'registrations' && <RegistrationsTab />}
           {activeTab === 'news' && <NewsTab />}
+          {activeTab === 'gallery' && <GalleryTab />}
           {activeTab === 'products' && <ProductsTab />}
           {activeTab === 'orders' && <OrdersTab />}
           {activeTab === 'applications' && <ApplicationsTab />}
           {activeTab === 'announcements' && <AnnouncementsTab />}
+          {activeTab === 'users' && user?.role === 'owner' && <UsersTab />}
         </div>
       </div>
     </div>
