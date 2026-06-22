@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Trophy, Award, Zap } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -38,11 +39,12 @@ export const Members = () => {
   const regularMembers = members.filter(m => !m.is_leader && !m.is_co_leader);
 
   const MemberCard = ({ member, index }) => (
+    <Link to={`/members/${encodeURIComponent(member.game_name)}`} className="block">
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.1 }}
-      className="bg-darknet-surface border border-border-DEFAULT p-6 hover:border-neon-blue/50 transition-all"
+      className="bg-darknet-surface border border-border-DEFAULT p-6 hover:border-neon-blue/50 transition-all cursor-pointer"
       data-testid={`member-card-${member.game_name}`}
     >
       <div className="flex items-start gap-4">
@@ -97,6 +99,7 @@ export const Members = () => {
         </div>
       </div>
     </motion.div>
+    </Link>
   );
 
   if (loading) {

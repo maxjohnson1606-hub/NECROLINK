@@ -220,13 +220,21 @@ class MemberRequest(BaseModel):
     name: str
     game_name: str
     role: str
-    rank: str = "Member"
+    rank: str = "Recruit"  # Recruit, Member, Veteran, Elite, Officer, Co-Leader, Leader, Owner
     achievements: List[str] = []
+    badges: List[str] = []  # Event Winner, Tournament Champion, MVP, Community Helper, Veteran
     wins: int = 0
     mvp_count: int = 0
+    points: int = 0
+    mlbb_id: Optional[str] = None
+    main_heroes: List[str] = []
+    join_date: Optional[str] = None
     avatar_url: Optional[str] = None
+    bio: Optional[str] = None
     is_leader: bool = False
     is_co_leader: bool = False
+    is_staff: bool = False
+    staff_role: Optional[str] = None  # Owner, Admin, Moderator, Event Manager
 
 class EventRequest(BaseModel):
     title: str
@@ -299,6 +307,41 @@ class ChangePasswordRequest(BaseModel):
 class ChangeEmailRequest(BaseModel):
     current_password: str
     new_email: EmailStr
+
+class TournamentRequest(BaseModel):
+    name: str
+    description: str
+    start_date: str
+    end_date: Optional[str] = None
+    prize_pool: Optional[str] = None
+    max_teams: int = 16
+    status: str = "upcoming"  # upcoming, ongoing, completed
+    banner_url: Optional[str] = None
+    rules: Optional[str] = None
+    bracket: Optional[dict] = None  # { rounds: [ { matches: [{ team1, team2, score1, score2, winner }] } ] }
+    winners: Optional[List[str]] = None  # ['1st place team', '2nd', '3rd']
+
+class AnnouncementBarRequest(BaseModel):
+    text: str
+    is_active: bool = True
+    color: str = "purple"  # purple, blue, red
+
+class MemberOfMonthRequest(BaseModel):
+    member_game_name: str
+    month: str  # YYYY-MM
+    reason: Optional[str] = None
+
+class DiscordSettingsRequest(BaseModel):
+    invite_url: Optional[str] = None
+    server_id: Optional[str] = None
+    enabled: bool = True
+
+class PromoteRequest(BaseModel):
+    rank: str  # Recruit, Member, Veteran, Elite, Officer, Co-Leader, Leader, Owner
+
+class PointsAdjustRequest(BaseModel):
+    delta: int  # positive to add, negative to deduct
+    reason: Optional[str] = None
 
 # ============ AUTH ROUTES ============
 @api_router.post("/auth/login")
@@ -667,6 +710,237 @@ async def update_order_status(order_id: str, status: str, request: Request):
         raise HTTPException(status_code=404, detail="Order not found")
     return {"message": "Order status updated"}
 
+# ============ TOURNAMENTS ============
+@api_router.get("/tournaments")
+async def get_tournaments(status: Optional[str] = None):
+    query = {}
+    if status:
+        query["status"] = status
+    items = await db.tournaments.find(query).sort("start_date", -1).to_list(100)
+    for t in items:
+        t["id"] = str(t.pop("_id"))
+    return items
+
+@api_router.get("/tournaments/{tournament_id}")
+async def get_tournament(tournament_id: str):
+    t = await db.tournaments.find_one({"_id": parse_object_id(tournament_id, "Tournament")})
+    if not t:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    t["id"] = str(t.pop("_id"))
+    return t
+
+@api_router.post("/tournaments")
+async def create_tournament(t: TournamentRequest, request: Request):
+    await get_admin_user(request)
+    doc = t.model_dump()
+    doc["created_at"] = datetime.now(timezone.utc)
+    result = await db.tournaments.insert_one(doc)
+    return {"id": str(result.inserted_id), "message": "Tournament created"}
+
+@api_router.put("/tournaments/{tournament_id}")
+async def update_tournament(tournament_id: str, t: TournamentRequest, request: Request):
+    await get_admin_user(request)
+    result = await db.tournaments.update_one(
+        {"_id": parse_object_id(tournament_id, "Tournament")},
+        {"$set": {**t.model_dump(), "updated_at": datetime.now(timezone.utc)}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    return {"message": "Tournament updated"}
+
+@api_router.delete("/tournaments/{tournament_id}")
+async def delete_tournament(tournament_id: str, request: Request):
+    await get_admin_user(request)
+    result = await db.tournaments.delete_one({"_id": parse_object_id(tournament_id, "Tournament")})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    return {"message": "Tournament deleted"}
+
+# ============ ANNOUNCEMENT BAR / DISCORD SETTINGS ============
+@api_router.get("/announcement-bar")
+async def get_announcement_bar():
+    bar = await db.settings.find_one({"key": "announcement_bar"}, {"_id": 0})
+    if not bar:
+        return {"text": "", "is_active": False, "color": "purple"}
+    return bar.get("value", {})
+
+@api_router.put("/announcement-bar")
+async def set_announcement_bar(req: AnnouncementBarRequest, request: Request):
+    await get_admin_user(request)
+    await db.settings.update_one(
+        {"key": "announcement_bar"},
+        {"$set": {"value": req.model_dump(), "updated_at": datetime.now(timezone.utc)}},
+        upsert=True
+    )
+    return {"message": "Announcement bar updated"}
+
+@api_router.get("/discord-settings")
+async def get_discord_settings():
+    doc = await db.settings.find_one({"key": "discord"}, {"_id": 0})
+    return doc.get("value", {}) if doc else {"invite_url": "", "server_id": "", "enabled": False}
+
+@api_router.put("/discord-settings")
+async def set_discord_settings(req: DiscordSettingsRequest, request: Request):
+    await get_admin_user(request)
+    await db.settings.update_one(
+        {"key": "discord"},
+        {"$set": {"value": req.model_dump(), "updated_at": datetime.now(timezone.utc)}},
+        upsert=True
+    )
+    return {"message": "Discord settings updated"}
+
+@api_router.get("/discord-widget")
+async def get_discord_widget():
+    doc = await db.settings.find_one({"key": "discord"})
+    if not doc:
+        return {"online": 0, "configured": False}
+    settings = doc.get("value", {})
+    server_id = settings.get("server_id")
+    if not server_id:
+        return {"online": 0, "configured": False}
+    try:
+        resp = requests.get(f"https://discord.com/api/guilds/{server_id}/widget.json", timeout=8)
+        if resp.status_code == 200:
+            data = resp.json()
+            return {
+                "online": len(data.get("members", [])),
+                "instant_invite": data.get("instant_invite"),
+                "name": data.get("name"),
+                "presence_count": data.get("presence_count", 0),
+                "configured": True,
+            }
+        return {"online": 0, "configured": True, "error": "Widget disabled in Discord server settings"}
+    except Exception as e:
+        return {"online": 0, "configured": True, "error": str(e)}
+
+# ============ MEMBER OF THE MONTH ============
+@api_router.get("/member-of-month")
+async def get_member_of_month():
+    doc = await db.member_of_month.find_one({}, sort=[("month", -1)])
+    if not doc:
+        return None
+    member = await db.members.find_one({"game_name": doc.get("member_game_name")}, {"_id": 0})
+    return {"month": doc.get("month"), "reason": doc.get("reason"), "member": member}
+
+@api_router.post("/member-of-month")
+async def set_member_of_month(req: MemberOfMonthRequest, request: Request):
+    await get_admin_user(request)
+    await db.member_of_month.update_one(
+        {"month": req.month},
+        {"$set": {**req.model_dump(), "created_at": datetime.now(timezone.utc)}},
+        upsert=True
+    )
+    return {"message": "Member of the Month set"}
+
+# ============ LEADERBOARD ============
+@api_router.get("/leaderboard")
+async def get_leaderboard():
+    top_wins = await db.members.find({}, {"_id": 0}).sort("wins", -1).limit(10).to_list(10)
+    top_mvp = await db.members.find({}, {"_id": 0}).sort("mvp_count", -1).limit(10).to_list(10)
+    top_points = await db.members.find({}, {"_id": 0}).sort("points", -1).limit(10).to_list(10)
+    tournament_winners_docs = await db.tournaments.find({"status": "completed"}).sort("end_date", -1).to_list(20)
+    tournament_winners = []
+    for tw in tournament_winners_docs:
+        if tw.get("winners"):
+            tournament_winners.append({"tournament": tw.get("name"), "winners": tw.get("winners"), "end_date": tw.get("end_date")})
+    return {"top_wins": top_wins, "top_mvp": top_mvp, "top_points": top_points, "tournament_winners": tournament_winners}
+
+# ============ MEMBER RANK / POINTS / DETAIL ============
+@api_router.patch("/members/{game_name}/rank")
+async def promote_member(game_name: str, req: PromoteRequest, request: Request):
+    await get_admin_user(request)
+    valid_ranks = ["Recruit", "Member", "Veteran", "Elite", "Officer", "Co-Leader", "Leader", "Owner"]
+    if req.rank not in valid_ranks:
+        raise HTTPException(status_code=400, detail=f"Invalid rank. Must be one of: {', '.join(valid_ranks)}")
+    is_leader = req.rank == "Leader"
+    is_co_leader = req.rank == "Co-Leader"
+    result = await db.members.update_one(
+        {"game_name": game_name},
+        {"$set": {"rank": req.rank, "is_leader": is_leader, "is_co_leader": is_co_leader}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Member not found")
+    return {"message": f"Member rank changed to {req.rank}"}
+
+@api_router.patch("/members/{game_name}/points")
+async def adjust_points(game_name: str, req: PointsAdjustRequest, request: Request):
+    await get_admin_user(request)
+    result = await db.members.update_one(
+        {"game_name": game_name},
+        {"$inc": {"points": req.delta}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Member not found")
+    return {"message": f"Points adjusted by {req.delta}"}
+
+@api_router.get("/members/{game_name}")
+async def get_member_detail(game_name: str):
+    member = await db.members.find_one({"game_name": game_name}, {"_id": 0})
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+    return member
+
+# ============ STAFF ============
+@api_router.get("/staff")
+async def get_staff():
+    staff = await db.members.find({"is_staff": True}, {"_id": 0}).to_list(100)
+    grouped = {"Owner": [], "Admin": [], "Moderator": [], "Event Manager": []}
+    for m in staff:
+        role = m.get("staff_role") or "Moderator"
+        if role in grouped:
+            grouped[role].append(m)
+        else:
+            grouped["Moderator"].append(m)
+    return grouped
+
+# ============ SITE-WIDE SEARCH ============
+@api_router.get("/search")
+async def search(q: str, limit: int = 20):
+    if not q or len(q.strip()) < 2:
+        return {"members": [], "events": [], "news": [], "products": []}
+    q_regex = {"$regex": q.strip(), "$options": "i"}
+    members = await db.members.find(
+        {"$or": [{"name": q_regex}, {"game_name": q_regex}, {"role": q_regex}, {"rank": q_regex}]},
+        {"_id": 0}
+    ).limit(limit).to_list(limit)
+    events = await db.events.find(
+        {"$or": [{"title": q_regex}, {"description": q_regex}, {"category": q_regex}]}
+    ).limit(limit).to_list(limit)
+    for e in events:
+        e["id"] = str(e.pop("_id"))
+    news = await db.news.find(
+        {"$or": [{"title": q_regex}, {"content": q_regex}, {"category": q_regex}]}
+    ).limit(limit).to_list(limit)
+    for n in news:
+        n["id"] = str(n.pop("_id"))
+    products = await db.products.find(
+        {"$or": [{"name": q_regex}, {"description": q_regex}, {"category": q_regex}]}
+    ).limit(limit).to_list(limit)
+    for p in products:
+        p["id"] = str(p.pop("_id"))
+    return {"members": members, "events": events, "news": news, "products": products}
+
+# ============ VISITOR COUNTER ============
+@api_router.post("/visit")
+async def track_visit():
+    await db.settings.update_one(
+        {"key": "visit_counter"},
+        {"$inc": {"value.total": 1}, "$set": {"updated_at": datetime.now(timezone.utc)}},
+        upsert=True
+    )
+    return {"ok": True}
+
+@api_router.get("/visit-stats")
+async def get_visit_stats():
+    doc = await db.settings.find_one({"key": "visit_counter"})
+    total_visits = (doc or {}).get("value", {}).get("total", 0) if doc else 0
+    return {
+        "total_visits": total_visits,
+        "registered_members": await db.users.count_documents({}),
+        "active_members": await db.members.count_documents({}),
+        "total_events": await db.events.count_documents({}),
+    }
+
 # ============ STATISTICS ============
 
 # ============ EXTERNAL NEWS FEEDS ============
@@ -954,13 +1228,32 @@ async def seed_initial_data():
             "rank": "Leader",
             "wins": 236,
             "mvp_count": 68,
-            "achievements": ["The Duke of Shadows", "Win Rate 72%", "KDA 8.2", "Silent Shadow Deadly"]
+            "points": 950,
+            "mlbb_id": "12345678",
+            "main_heroes": ["Aamon", "Hayabusa", "Ling", "Lancelot"],
+            "join_date": "2024-01-15",
+            "bio": "The Duke of Shadows. Silent. Deadly. Always one step ahead.",
+            "achievements": ["The Duke of Shadows", "Win Rate 72%", "KDA 8.2", "Silent Shadow Deadly"],
+            "badges": ["Tournament Champion", "MVP", "Veteran"],
+            "is_staff": True,
+            "staff_role": "Owner"
         }}
     )
-    # Fix legacy game_name for co-leader
+    # Update co-leader with extended fields
     await db.members.update_one(
-        {"game_name": "DarkNet_Phantom"},
-        {"$set": {"game_name": "NECROLINK_Phantom"}}
+        {"game_name": {"$in": ["DarkNet_Phantom", "NECROLINK_Phantom"]}},
+        {"$set": {
+            "game_name": "NECROLINK_Phantom",
+            "rank": "Co-Leader",
+            "points": 720,
+            "mlbb_id": "98765432",
+            "main_heroes": ["Lancelot", "Hayabusa", "Saber"],
+            "join_date": "2024-02-08",
+            "bio": "Cyber Phantom. The shadow that strikes from the jungle.",
+            "badges": ["MVP", "Veteran"],
+            "is_staff": True,
+            "staff_role": "Admin"
+        }}
     )
     if await db.members.count_documents({}) == 0:
         await db.members.insert_many([
@@ -1074,6 +1367,74 @@ async def seed_initial_data():
             {"title": "Squad Lineup", "description": "The full NECROLINK team", "category": "team",
              "image_url": "https://images.pexels.com/photos/17195067/pexels-photo-17195067.jpeg?auto=compress&cs=tinysrgb&w=940",
              "created_at": datetime.now(timezone.utc)},
+        ])
+
+    # Announcement bar default
+    bar_exists = await db.settings.find_one({"key": "announcement_bar"})
+    if not bar_exists:
+        await db.settings.insert_one({
+            "key": "announcement_bar",
+            "value": {"text": "🔥 NECROLINK Dark Cup 2026 registration is now OPEN — 10,000 Diamonds prize pool!", "is_active": True, "color": "purple"},
+            "updated_at": datetime.now(timezone.utc)
+        })
+
+    # Member of the Month default
+    if await db.member_of_month.count_documents({}) == 0:
+        await db.member_of_month.insert_one({
+            "member_game_name": "NECROLINK_Aamon",
+            "month": datetime.now(timezone.utc).strftime("%Y-%m"),
+            "reason": "Carried the team to victory in 4 consecutive weekend tournaments. 68 MVPs and rising!",
+            "created_at": datetime.now(timezone.utc)
+        })
+
+    # Tournament seed
+    if await db.tournaments.count_documents({}) == 0:
+        now = datetime.now(timezone.utc)
+        await db.tournaments.insert_many([
+            {
+                "name": "NECROLINK Dark Cup 2026",
+                "description": "Our flagship monthly tournament. 16 teams compete in single-elimination format.",
+                "start_date": (now + timedelta(days=14)).isoformat(),
+                "end_date": (now + timedelta(days=16)).isoformat(),
+                "prize_pool": "10,000 Diamonds + Champion Title",
+                "max_teams": 16,
+                "status": "upcoming",
+                "banner_url": "https://images.pexels.com/photos/9072394/pexels-photo-9072394.jpeg?auto=compress&cs=tinysrgb&w=940",
+                "rules": "Single elimination. Best of 3. Standard MLBB ruleset. No banned heroes.",
+                "bracket": None,
+                "winners": None,
+                "created_at": now,
+            },
+            {
+                "name": "Friday Night Cup #12",
+                "description": "Weekly quick tournament. 8 teams, single elimination.",
+                "start_date": (now - timedelta(days=7)).isoformat(),
+                "end_date": (now - timedelta(days=7)).isoformat(),
+                "prize_pool": "1,000 Diamonds",
+                "max_teams": 8,
+                "status": "completed",
+                "banner_url": "https://images.pexels.com/photos/7862505/pexels-photo-7862505.jpeg?auto=compress&cs=tinysrgb&w=940",
+                "rules": "Single elimination. Best of 1.",
+                "bracket": {
+                    "rounds": [
+                        {"name": "Quarter Finals", "matches": [
+                            {"team1": "Team Alpha", "team2": "Team Beta", "score1": 1, "score2": 0, "winner": "Team Alpha"},
+                            {"team1": "Team Gamma", "team2": "Team Delta", "score1": 0, "score2": 1, "winner": "Team Delta"},
+                            {"team1": "Team Epsilon", "team2": "Team Zeta", "score1": 1, "score2": 0, "winner": "Team Epsilon"},
+                            {"team1": "Team Eta", "team2": "Team Theta", "score1": 1, "score2": 0, "winner": "Team Eta"},
+                        ]},
+                        {"name": "Semi Finals", "matches": [
+                            {"team1": "Team Alpha", "team2": "Team Delta", "score1": 1, "score2": 0, "winner": "Team Alpha"},
+                            {"team1": "Team Epsilon", "team2": "Team Eta", "score1": 0, "score2": 1, "winner": "Team Eta"},
+                        ]},
+                        {"name": "Final", "matches": [
+                            {"team1": "Team Alpha", "team2": "Team Eta", "score1": 1, "score2": 0, "winner": "Team Alpha"},
+                        ]}
+                    ]
+                },
+                "winners": ["Team Alpha", "Team Eta", "Team Epsilon"],
+                "created_at": now,
+            }
         ])
 
 @app.on_event("startup")
