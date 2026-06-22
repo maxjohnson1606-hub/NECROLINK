@@ -295,7 +295,7 @@ class UserRoleRequest(BaseModel):
 # ============ AUTH ROUTES ============
 @api_router.post("/auth/login")
 async def login(request: LoginRequest, response: Response):
-    email = request.email.lower()
+    email = request.email.lower().strip()
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(request.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")

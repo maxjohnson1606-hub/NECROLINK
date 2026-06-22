@@ -1,101 +1,92 @@
 # NECROLINK MLBB Clan Website - PRD
 
 ## Original Problem Statement
-Create a professional esports and gaming community website for an MLBB clan (originally Dark_Net, **renamed to NECROLINK**) with cyberpunk theme. Major v2 update added Events page, News page, Store page, and comprehensive Admin Dashboard for managing all content without coding.
-
-## User Choices (v2 Iteration)
-- **Image uploads**: Use Emergent Object Storage AND allow URL paste (both supported in admin forms)
-- **Store/Payments**: NO payment integration - just collect order info; admin contacts customer manually
-- **News**: Both manual admin posts allowed (auto RSS fetch deferred — no official MLBB RSS exists)
-- **Event Registration**: Open to anyone via public form (no login required)
-- **Rebrand**: All Dark_Net → NECROLINK across the entire site
+Professional esports/gaming community website for an MLBB clan with cyberpunk theme, dynamic admin management, member personal spaces, and store/events functionality.
 
 ## Architecture
 - **Backend**: FastAPI + MongoDB + JWT cookie auth + SendGrid (mocked) + Emergent Object Storage
 - **Frontend**: React 19 + React Router + Framer Motion + Tailwind (custom cyberpunk theme)
-- **Auth**: JWT httpOnly cookies, admin/member role-based
+- **Auth Roles**: `member` < `admin` < `owner` (3-tier role hierarchy)
 
-## Implemented Features
+## Implemented Features by Iteration
 
-### v1 Foundation (Date: 2026-02 part 1)
+### v1 (2026-02 part 1) — Foundation
 - JWT auth, Home/About/Members/Join Us pages, basic admin dashboard
+- 19/19 backend tests passing
 
-### v2 Major Expansion (Date: 2026-02 part 2)
-- **Full NECROLINK rebrand** (logo: Skull icon + neon purple, all text updated)
-- **Events Page** (`/events`):
-  - Live event list (Upcoming/Ongoing/Completed sections)
-  - 14 default event categories (Friday Night Clash, Sunday Championship, NECROLINK Dark Cup, Halloween, etc.)
-  - Upcoming calendar grid (next 5 dates with event titles)
-  - Real-time countdown timer per event (D/H/M/S, updates every second)
-  - "Live Now" pulse indicator for ongoing events
-  - Category + status filters
-  - Public registration modal (name, email, IGN, Discord, notes)
-- **News Page** (`/news`):
-  - 6 categories: Patch Notes, New Heroes, New Skins, Events, Esports, Game Updates
-  - Pinned announcements section at top
-  - Category filter buttons
-  - External source URL support
-- **Store Page** (`/store`):
-  - Two sections: Merchandise (jerseys/hoodies/tshirts/mousepads/stickers/keychains) + MLBB Top-Up (diamonds/weekly_pass/starlight/event_pass)
-  - Section tabs + category sub-filters
-  - Order modal with MLBB User ID + Server ID fields for top-ups
-  - Low stock badge when stock < 10
-  - Admin will contact customer for payment (no Stripe)
-- **Enhanced Admin Dashboard** (`/admin`) — 8 tabs:
-  - **Overview**: 8 stat cards (pending apps, upcoming/ongoing events, pending regs, orders, members, news, products)
-  - **Events**: Full CRUD with form (title, desc, category, datetime, location, status, banner, max participants, prize pool)
-  - **Registrations**: View all event registrations with event title lookup, approve/reject
-  - **News**: Full CRUD with pin/publish toggles, category picker, image, source URL
-  - **Products**: Full CRUD with section switch (auto-updates category options), price, stock, image
-  - **Orders**: View orders with customer info + game IDs, mark complete/cancelled
-  - **Applications**: Approve/reject clan applications
-  - **Announcements**: Create/delete homepage announcements
-- **Image Upload Component**: Used in all admin forms (Events/News/Products) — either paste URL or upload file (max 5MB, image types only) via Emergent Object Storage
+### v2 (2026-02 part 2) — Major Expansion (Rename to NECROLINK)
+- Full Dark_Net → NECROLINK rebrand
+- Events Page with calendar, countdown timers, public registration, 14 categories
+- News Page with 6 categories, pinned articles, source URLs
+- Store Page (Merchandise + MLBB Top-Up sections) with order flow (admin contacts customer)
+- Enhanced Admin Dashboard with 8 tabs and built-in ImageUploader
+- 34/34 backend tests passing
 
-### Backend Endpoints (29 total)
-- Auth: `/api/auth/{login,register,me,logout}`
-- Files: `/api/upload`, `/api/files/{path}`
-- Events: GET/POST/PUT/DELETE `/api/events`, `/api/events/{id}`
-- Registrations: POST/GET `/api/event-registrations`, PATCH `/api/event-registrations/{id}/status`
-- News: GET/POST/PUT/DELETE `/api/news`, `/api/news/{id}`
-- Products: GET/POST/PUT/DELETE `/api/products`, `/api/products/{id}`
-- Orders: POST/GET `/api/orders`, PATCH `/api/orders/{id}/status`
-- Members, Applications, Announcements (from v1)
-- Stats: GET `/api/stats` (admin overview)
+### v3 (2026-02 part 3) — Owner Role + Personal Spaces
+- **Owner Role** (highest privilege above admin)
+  - Can manage all admins, change user roles, delete users
+  - Cannot modify own role/account
+- **Profile Page** (`/profile`, login required)
+  - Avatar + bio + display name + game name + preferred role editor
+  - Avatar upload (client-side FileReader to data URL)
+  - 4 tabs: Profile, My Applications, My Event Registrations, My Orders
+- **Gallery Page** (`/gallery`, public)
+  - 4 categories: Match Screenshots, MVP Moments, Team Highlights, Event Memories
+  - Lightbox view with category filter
+  - Admin-uploaded images with title/description
+- **Admin Gallery Tab** — Full CRUD with image uploader
+- **Owner Users Tab** — User management (role changes, deletion)
+- **Logo & Branding**
+  - Custom NECROLINK skull/hood logo (navbar, footer, home hero)
+  - Aamon player poster as leader avatar (Members page)
+  - Leader stats updated to match poster: 236 wins, 68 MVPs, "The Duke of Shadows" achievement
+- **Contact Info** (footer)
+  - Instagram: [@necrolink.official](https://www.instagram.com/necrolink.official/)
+  - Email: maxjohnson1606@gmail.com
+  - Telegram: [@CurrentIyAFK](https://t.me/CurrentIyAFK)
+- **57/57 backend tests passing (23 new + 34 regression), 31/31 frontend UI checks**
 
-## Testing Status
-- Iteration 1: 19/19 backend tests passing
-- Iteration 2: **34/34 backend tests passing**, all critical frontend flows verified via Playwright
+### Backend Endpoint Count: 38
+- Auth: 5 endpoints (login, register, me, logout, profile)
+- My-Data: 3 (applications, registrations, orders)
+- Files: 2 (upload admin-only, get-by-path)
+- Events: 5 (CRUD + registrations)
+- Registrations: 3 (create, list, status)
+- News: 5 (CRUD)
+- Products: 4 (CRUD)
+- Orders: 3 (create, list, status)
+- Members, Applications, Announcements, Gallery, Stats, Users (owner)
 
-## Test Credentials
-- **Primary admin**: `admin@necrolink.com` / `Necrolink2024!`
-- **Legacy admin** (backward compat): `admin@darknet.com` / `DarkNet2024!`
+## Test Credentials (`/app/memory/test_credentials.md`)
+- **Owner**: `owner@necrolink.com` / `Owner2024!`
+- **Admin**: `admin@necrolink.com` / `Necrolink2024!`
+- **Legacy Admin**: `admin@darknet.com` / `DarkNet2024!`
 
-## Deferred Backlog (P0/P1/P2)
-### P1 — Next priorities
-- Gallery page (match screenshots, MVP moments) with admin upload UI
-- Tournaments page (brackets, schedules, results) — currently merged into Events
-- Member profile page (private profile editor)
-- MLBB news auto-fetch (no official RSS — would need web scraping of mobilelegends.com)
-- Refactor server.py (now 804 lines) into modules: routes_events.py, routes_news.py, services/storage.py
+## Deferred Backlog
+### P0 — Polish
+- Real SendGrid API key (user kept placeholder — orders/registrations still save to DB)
+- Refactor server.py (993 lines → modular routers)
 
-### P2 — Polish & Production
-- Replace native datetime-local input with shadcn Calendar in admin event form
-- Real SendGrid API key for production email
-- Rate limiting on public POST endpoints (event-registrations, orders, applications)
-- Brute force lockout on `/api/auth/login` (5-fail threshold per playbook)
-- CORS tightening to specific production origins
-- Cookie `secure=True` for HTTPS deployment
-- Status field enum validation on PATCH endpoints
+### P1 — Features
+- Tournaments page (brackets, schedules — currently within Events)
+- MLBB news auto-fetch (no official RSS exists; would need web scraping)
+- Replace native datetime-local with shadcn Calendar in admin event form
 
-## Files Structure
+### P2 — Production Hardening
+- Brute-force lockout on /api/auth/login
+- Rate limiting on public POST endpoints
+- CORS tightening to production origin
+- Cookie `secure=True` for HTTPS
+- Avatar file-size limit on client (200KB) before data URL conversion
+
+## File Structure
 ```
-backend/server.py              (804 lines — TO REFACTOR)
-frontend/src/App.js            (routes: /, /about, /members, /events, /news, /store, /join, /login, /admin)
+backend/server.py              (993 lines — TO REFACTOR)
+frontend/src/App.js            (routes: /, /about, /members, /events, /news, /gallery, /store, /join, /login, /profile, /admin)
 frontend/src/pages/
-  Home.js, About.js, Members.js, JoinUs.js, Login.js,
-  Events.js, News.js, Store.js, AdminDashboard.js
+  Home, About, Members, JoinUs, Login,
+  Events, News, Store, Gallery, Profile, AdminDashboard
 frontend/src/components/
-  Navigation.js, Footer.js, ProtectedRoute.js
-frontend/src/contexts/AuthContext.js
+  Navigation, Footer, ProtectedRoute
+frontend/src/contexts/AuthContext
 ```
