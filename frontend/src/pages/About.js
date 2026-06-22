@@ -22,7 +22,7 @@ export const About = () => {
             transition={{ duration: 0.8 }}
           >
             <h1 className="font-heading text-4xl sm:text-5xl md:text-6xl font-black tracking-tighter uppercase mb-4 neon-glow-blue" data-testid="about-title">
-              About Dark_Net
+              About NECROLINK
             </h1>
             <p className="font-body text-lg text-neon-purple tracking-wide">
               Elite Mobile Legends: Bang Bang Clan
@@ -47,7 +47,7 @@ export const About = () => {
             </h2>
             <div className="space-y-4 font-body text-base text-text-secondary leading-relaxed">
               <p>
-                Dark_Net was founded by a group of passionate Mobile Legends players who shared a common vision: 
+                NECROLINK was founded by a group of passionate Mobile Legends players who shared a common vision: 
                 to create an elite gaming community built on skill, respect, and the pursuit of excellence.
               </p>
               <p>
@@ -56,7 +56,7 @@ export const About = () => {
                 claimed victories, and built lasting friendships along the way.
               </p>
               <p>
-                Today, Dark_Net stands as a beacon for MLBB players who want more than just casual gameplay. 
+                Today, NECROLINK stands as a beacon for MLBB players who want more than just casual gameplay. 
                 We're a family united by our love for the game and our commitment to continuous improvement.
               </p>
             </div>
@@ -154,7 +154,7 @@ export const About = () => {
               Our Commitment
             </h2>
             <p className="font-body text-base text-text-secondary leading-relaxed mb-4">
-              Dark_Net is more than a clan—it's a brotherhood. We commit to fostering an environment where 
+              NECROLINK is more than a clan—it's a brotherhood. We commit to fostering an environment where 
               every member can thrive, improve, and enjoy the game to its fullest.
             </p>
             <p className="font-body text-base text-text-secondary leading-relaxed">

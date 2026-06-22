@@ -116,7 +116,7 @@ export const Members = () => {
             Our Warriors
           </h1>
           <p className="font-body text-lg text-text-secondary tracking-wide">
-            Meet the elite players of Dark_Net
+            Meet the elite players of NECROLINK
           </p>
         </div>
 

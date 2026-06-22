@@ -1,0 +1,52 @@
+{
+  "summary": "Iteration 2 end-to-end testing of NECROLINK rebrand + new Events/News/Store/Orders/Registrations features. Backend: 34/34 pytest cases passed (100%). Frontend: NECROLINK branding live, all 7 public nav links present, Events/News/Store/Admin pages all functional. Critical user flows verified end-to-end: event registration (public modal -> success message), order placement creates orders with game_id captured, admin login (both new admin@necrolink.com and legacy admin@darknet.com work), admin dashboard shows live data and all 8 tabs working. No critical issues.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/upload", "issue": "Multipart upload validates content-type from client header (image/*). If a client lies about content-type, only the binary write would still occur. Consider sniffing magic bytes for production."},
+      {"endpoint": "/api/events/{id}, /api/news/{id}, /api/products/{id}", "issue": "Raw ObjectId() conversion - invalid IDs will return 500 with 'is not a valid ObjectId' instead of 404. Wrap in try/except and return 404."},
+      {"endpoint": "/api/event-registrations, /api/orders, /api/applications", "issue": "All public POST endpoints (registrations/orders/applications) lack rate-limiting or captcha - vulnerable to spam."},
+      {"endpoint": "/api/auth/login", "issue": "Carried over from iter1: still no brute-force lockout (playbook recommends 5-fail lockout)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AdminDashboard - Overview tab", "issue": "data-testid='tab-overview' is missing on the Overview tab button (only 7 of 8 tabs have testids). Tab is still functional as default view.", "selector": "[data-testid='tab-overview']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin Events form", "issues": ["Uses browser-native datetime-local picker (mm/dd/yyyy, --:-- --) instead of shadcn Calendar component - inconsistent with cyberpunk theme but functional."]},
+      {"screen": "Store / product cards", "issues": ["When product image_url is missing or blocked, default placeholder box icon shown - acceptable."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_necrolink_api.py",
+    "/app/backend/tests/test_darknet_api.py",
+    "/app/test_reports/pytest/necrolink_iter2.xml"
+  ],
+  "action_items": [
+    "Add data-testid='tab-overview' to the Overview tab button in AdminDashboard for test consistency.",
+    "Wrap ObjectId() conversions in events/news/products endpoints with try/except to return 404 instead of 500 on invalid IDs.",
+    "Consider switching admin event datetime picker from native input to shadcn Calendar for theme consistency.",
+    "Add rate-limiting on public POST endpoints (/api/event-registrations, /api/orders, /api/applications) before production launch.",
+    "(Carry-over) Implement brute-force lockout on /api/auth/login per playbook (5-fail threshold)."
+  ],
+  "critical_code_review_comments": [
+    "server.py grew to 804 lines (was 491) - urgently needs refactor into modules: routes_events.py, routes_news.py, routes_store.py, routes_orders.py, services/storage.py, services/auth.py.",
+    "Many endpoints repeat the pattern `ObjectId(id)` -> 500 on invalid hex. Centralize into a helper that returns 404.",
+    "Order pricing logic (unit_price * quantity) trusts server-side product price (good), but does NOT validate quantity > 0 - a negative/zero quantity would create $0 or negative orders.",
+    "PATCH endpoints accept `status` as a query param string with no enum validation - admin could set arbitrary statuses like 'foo'. Add Literal/Enum validation.",
+    "Storage key is a module-global with manual re-init on 403. In a multi-worker uvicorn setup this is race-y; use a per-request init or asyncio.Lock.",
+    "/api/event-registrations DELETE-on-event-cascade is correct but performed AFTER the delete - if registrations delete fails the event is already gone (acceptable but worth logging)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_necrolink_api.py (new - 34 tests covering events/registrations/news/products/orders/stats/upload/auth)"
+  ],
+  "success_rate": {"backend": "100% (34/34)", "frontend": "100% functional - all critical flows verified end-to-end via Playwright: NECROLINK branding, 7 nav links, Events page + register modal + success message, Store page + Merchandise/Top-Up tabs + buy buttons, News page + category filters + pinned section, Admin login (new + legacy), Admin dashboard 8 tabs (7 with testids), event create form open, orders/registrations data visible with game_id captured."},
+  "test_credentials": "New admin: admin@necrolink.com / Necrolink2024! - VERIFIED working. Legacy admin: admin@darknet.com / DarkNet2024! - VERIFIED still works.",
+  "seed_data_creation": "Backend seed verified: 2 members (NECROLINK_Shadow, NECROLINK_Phantom), 2 announcements, 3 events (Friday Night Clash, NECROLINK Dark Cup 2026, Rank Push Night), 2 news articles, 8 products (4 merchandise + 4 topup). All present in DB and rendered on UI.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression suite: /app/backend/tests/test_necrolink_api.py (34 tests, covers full Events/Registrations/News/Products/Orders/Stats/Upload/Auth). Run via: REACT_APP_BACKEND_URL=https://voltage-victory.preview.emergentagent.com pytest /app/backend/tests/test_necrolink_api.py -v. SendGrid email is MOCKED via placeholder key (silent fail OK - DB record always created). Object storage uses EMERGENT_LLM_KEY and is functional (verified upload+download of 1x1 PNG). Frontend data-testids: events-title, store-title, news-title, admin-dashboard-title, tab-{events,registrations,news,products,orders,applications,announcements} (tab-overview MISSING), register-event-{id}, buy-product-{id}, edit-event-{id}, delete-event-{id}, new-event-btn, save-event-btn etc. All admin mutations use httpOnly JWT cookies via axios withCredentials.",
+  "rca of the issue": "N/A - no critical bugs identified in this iteration. Minor missing data-testid for tab-overview noted under frontend_issues."
+}

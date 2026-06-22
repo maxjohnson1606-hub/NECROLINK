@@ -61,7 +61,7 @@ export const JoinUs = () => {
             className="font-heading text-4xl sm:text-5xl md:text-6xl font-black tracking-tighter uppercase mb-4 neon-glow-blue"
             data-testid="join-title"
           >
-            Join Dark_Net
+            Join NECROLINK
           </motion.h1>
           <motion.p
             initial={{ opacity: 0, y: 20 }}
@@ -258,7 +258,7 @@ export const JoinUs = () => {
             {/* Why Join */}
             <div>
               <label htmlFor="reason" className="block font-body text-sm text-text-secondary mb-2 uppercase tracking-wider">
-                Why do you want to join Dark_Net? *
+                Why do you want to join NECROLINK? *
               </label>
               <textarea
                 id="reason"
@@ -303,7 +303,7 @@ export const JoinUs = () => {
           <div className="flex flex-wrap justify-center gap-4">
             <span className="font-body text-sm text-neon-blue">darknet@mlbb.com</span>
             <span className="text-text-muted">|</span>
-            <span className="font-body text-sm text-neon-purple">Discord: DarkNet_Official</span>
+            <span className="font-body text-sm text-neon-purple">Discord: NECROLINK_Official</span>
           </div>
         </motion.div>
       </div>

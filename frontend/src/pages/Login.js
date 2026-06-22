@@ -63,7 +63,7 @@ export const Login = () => {
               {isLogin ? 'Login' : 'Register'}
             </h1>
             <p className="font-body text-sm text-text-secondary">
-              {isLogin ? 'Access your Dark_Net account' : 'Create a new account'}
+              {isLogin ? 'Access your NECROLINK account' : 'Create a new account'}
             </p>
           </div>
 

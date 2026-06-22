@@ -9,6 +9,9 @@ import { About } from './pages/About';
 import { Members } from './pages/Members';
 import { JoinUs } from './pages/JoinUs';
 import { Login } from './pages/Login';
+import { Events } from './pages/Events';
+import { News } from './pages/News';
+import { Store } from './pages/Store';
 import { AdminDashboard } from './pages/AdminDashboard';
 import '@/App.css';
 
@@ -23,6 +26,9 @@ function App() {
               <Route path="/" element={<Home />} />
               <Route path="/about" element={<About />} />
               <Route path="/members" element={<Members />} />
+              <Route path="/events" element={<Events />} />
+              <Route path="/news" element={<News />} />
+              <Route path="/store" element={<Store />} />
               <Route path="/join" element={<JoinUs />} />
               <Route path="/login" element={<Login />} />
               <Route
