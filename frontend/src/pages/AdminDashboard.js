@@ -744,7 +744,7 @@ export const AdminDashboard = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                data-testid={`tab-${tab.id}`}
+                data-testid={`tab-${tab.id === 'stats' ? 'overview' : tab.id}`}
                 className={`flex items-center gap-2 px-3 py-2 font-body text-xs uppercase tracking-wider transition-colors ${
                   activeTab === tab.id
                     ? 'text-neon-blue border-b-2 border-neon-blue'

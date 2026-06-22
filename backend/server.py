@@ -177,6 +177,13 @@ async def get_admin_user(request: Request) -> dict:
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
+def parse_object_id(id_str: str, resource_name: str = "Resource") -> ObjectId:
+    """Safely parse an ObjectId, returning 404 instead of 500 on invalid format."""
+    try:
+        return ObjectId(id_str)
+    except Exception:
+        raise HTTPException(status_code=404, detail=f"{resource_name} not found")
+
 # ============ MODELS ============
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -435,7 +442,7 @@ async def get_events(status: Optional[str] = None):
 
 @api_router.get("/events/{event_id}")
 async def get_event(event_id: str):
-    event = await db.events.find_one({"_id": ObjectId(event_id)})
+    event = await db.events.find_one({"_id": parse_object_id(event_id, "Event")})
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
     event["id"] = str(event.pop("_id"))
@@ -453,7 +460,7 @@ async def create_event(event: EventRequest, request: Request):
 async def update_event(event_id: str, event: EventRequest, request: Request):
     await get_admin_user(request)
     result = await db.events.update_one(
-        {"_id": ObjectId(event_id)},
+        {"_id": parse_object_id(event_id, "Event")},
         {"$set": {**event.model_dump(), "updated_at": datetime.now(timezone.utc)}}
     )
     if result.matched_count == 0:
@@ -463,7 +470,7 @@ async def update_event(event_id: str, event: EventRequest, request: Request):
 @api_router.delete("/events/{event_id}")
 async def delete_event(event_id: str, request: Request):
     await get_admin_user(request)
-    result = await db.events.delete_one({"_id": ObjectId(event_id)})
+    result = await db.events.delete_one({"_id": parse_object_id(event_id, "Event")})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Event not found")
     # Also delete registrations
@@ -474,7 +481,7 @@ async def delete_event(event_id: str, request: Request):
 @api_router.post("/event-registrations")
 async def register_event(registration: EventRegistrationRequest):
     # Verify event exists
-    event = await db.events.find_one({"_id": ObjectId(registration.event_id)})
+    event = await db.events.find_one({"_id": parse_object_id(registration.event_id, "Event")})
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
     doc = registration.model_dump()
@@ -499,7 +506,7 @@ async def get_event_registrations(request: Request, event_id: Optional[str] = No
 async def update_registration_status(reg_id: str, status: str, request: Request):
     await get_admin_user(request)
     result = await db.event_registrations.update_one(
-        {"_id": ObjectId(reg_id)},
+        {"_id": parse_object_id(reg_id, "Registration")},
         {"$set": {"status": status, "updated_at": datetime.now(timezone.utc)}}
     )
     if result.matched_count == 0:
@@ -519,7 +526,7 @@ async def get_news(category: Optional[str] = None):
 
 @api_router.get("/news/{news_id}")
 async def get_news_item(news_id: str):
-    item = await db.news.find_one({"_id": ObjectId(news_id)})
+    item = await db.news.find_one({"_id": parse_object_id(news_id, "News article")})
     if not item:
         raise HTTPException(status_code=404, detail="News item not found")
     item["id"] = str(item.pop("_id"))
@@ -537,7 +544,7 @@ async def create_news(news: NewsRequest, request: Request):
 async def update_news(news_id: str, news: NewsRequest, request: Request):
     await get_admin_user(request)
     result = await db.news.update_one(
-        {"_id": ObjectId(news_id)},
+        {"_id": parse_object_id(news_id, "News article")},
         {"$set": {**news.model_dump(), "updated_at": datetime.now(timezone.utc)}}
     )
     if result.matched_count == 0:
@@ -547,7 +554,7 @@ async def update_news(news_id: str, news: NewsRequest, request: Request):
 @api_router.delete("/news/{news_id}")
 async def delete_news(news_id: str, request: Request):
     await get_admin_user(request)
-    result = await db.news.delete_one({"_id": ObjectId(news_id)})
+    result = await db.news.delete_one({"_id": parse_object_id(news_id, "News article")})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="News not found")
     return {"message": "News deleted"}
@@ -577,7 +584,7 @@ async def create_product(product: ProductRequest, request: Request):
 async def update_product(product_id: str, product: ProductRequest, request: Request):
     await get_admin_user(request)
     result = await db.products.update_one(
-        {"_id": ObjectId(product_id)},
+        {"_id": parse_object_id(product_id, "Product")},
         {"$set": {**product.model_dump(), "updated_at": datetime.now(timezone.utc)}}
     )
     if result.matched_count == 0:
@@ -587,7 +594,7 @@ async def update_product(product_id: str, product: ProductRequest, request: Requ
 @api_router.delete("/products/{product_id}")
 async def delete_product(product_id: str, request: Request):
     await get_admin_user(request)
-    result = await db.products.delete_one({"_id": ObjectId(product_id)})
+    result = await db.products.delete_one({"_id": parse_object_id(product_id, "Product")})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Product not found")
     return {"message": "Product deleted"}
@@ -595,7 +602,9 @@ async def delete_product(product_id: str, request: Request):
 # ============ ORDERS ============
 @api_router.post("/orders")
 async def create_order(order: OrderRequest):
-    product = await db.products.find_one({"_id": ObjectId(order.product_id)})
+    if order.quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be at least 1")
+    product = await db.products.find_one({"_id": parse_object_id(order.product_id, "Product")})
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     doc = order.model_dump()
@@ -621,7 +630,7 @@ async def get_orders(request: Request):
 async def update_order_status(order_id: str, status: str, request: Request):
     await get_admin_user(request)
     result = await db.orders.update_one(
-        {"_id": ObjectId(order_id)},
+        {"_id": parse_object_id(order_id, "Order")},
         {"$set": {"status": status, "updated_at": datetime.now(timezone.utc)}}
     )
     if result.matched_count == 0:
