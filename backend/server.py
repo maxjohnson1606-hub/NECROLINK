@@ -1,5 +1,17 @@
 from dotenv import load_dotenv
 from pathlib import Path
+import ssl
+
+# Patch SSL context to lower security level for OpenSSL 3.x compatibility with MongoDB Atlas
+_orig_create_default_context = ssl.create_default_context
+def _patched_create_default_context(*args, **kwargs):
+    ctx = _orig_create_default_context(*args, **kwargs)
+    try:
+        ctx.set_ciphers("DEFAULT@SECLEVEL=0")
+    except Exception:
+        pass
+    return ctx
+ssl.create_default_context = _patched_create_default_context
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -22,7 +34,8 @@ from sendgrid.helpers.mail import Mail
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
+# Short serverSelectionTimeoutMS so startup doesn't block for 30s per operation
+client = AsyncIOMotorClient(mongo_url, tlsInsecure=True, serverSelectionTimeoutMS=5000, connectTimeoutMS=5000, socketTimeoutMS=5000)
 db = client[os.environ['DB_NAME']]
 
 # JWT settings
@@ -1437,17 +1450,27 @@ async def seed_initial_data():
             }
         ])
 
-@app.on_event("startup")
-async def startup_event():
+async def _background_startup():
+    import asyncio
+    await asyncio.sleep(1)
     init_storage()
-    await seed_admin()
-    await seed_initial_data()
+    try:
+        await seed_admin()
+        await seed_initial_data()
+    except Exception as e:
+        logger.error(f"Startup seeding failed (DB may not be reachable): {e}")
     try:
         await db.users.create_index("email", unique=True)
         await db.members.create_index("game_name", unique=True)
     except Exception as e:
         logger.warning(f"Index creation: {e}")
     logger.info("Startup complete")
+
+@app.on_event("startup")
+async def startup_event():
+    import asyncio
+    asyncio.create_task(_background_startup())
+    logger.info("Background startup task scheduled")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

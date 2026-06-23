@@ -92,6 +92,16 @@ webpackConfig.devServer = (devServerConfig) => {
   // Allow preview host
   devServerConfig.allowedHosts = "all";
 
+  // Proxy /api requests to the backend server (array format for webpack-dev-server v5)
+  devServerConfig.proxy = [
+    {
+      context: ["/api"],
+      target: "http://localhost:8000",
+      changeOrigin: true,
+      secure: false,
+    },
+  ];
+
   return devServerConfig;
 };
 
