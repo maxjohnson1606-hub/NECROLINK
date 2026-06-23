@@ -17,7 +17,11 @@ const EVENT_CATEGORIES = [
   'Halloween Events', 'Winter Tournament', 'New Year Tournament',
 ];
 
-const NEWS_CATEGORIES = ['patch_notes', 'new_heroes', 'new_skins', 'events', 'esports', 'game_updates'];
+const NEWS_CATEGORIES = [
+  'patch_notes', 'new_heroes', 'hero_revamps', 'new_skins',
+  'events', 'tournaments', 'mlbb_esports', 'collaborations',
+  'game_updates', 'community_news'
+];
 const PRODUCT_CATEGORIES = {
   merchandise: ['jersey', 'hoodie', 'tshirt', 'mousepad', 'sticker', 'keychain'],
   topup: ['diamonds', 'weekly_pass', 'starlight', 'event_pass'],
@@ -232,7 +236,7 @@ const NewsTab = () => {
   const [news, setNews] = useState([]);
   const [editing, setEditing] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const initialForm = { title: '', content: '', category: 'patch_notes', image_url: '', source_url: '', is_pinned: false, is_published: true };
+  const initialForm = { title: '', content: '', category: 'patch_notes', image_url: '', source_url: '', is_pinned: false, is_featured: false, is_published: true };
   const [form, setForm] = useState(initialForm);
 
   const fetchNews = async () => {
@@ -259,7 +263,7 @@ const NewsTab = () => {
     setForm({
       title: item.title, content: item.content, category: item.category,
       image_url: item.image_url || '', source_url: item.source_url || '',
-      is_pinned: item.is_pinned, is_published: item.is_published
+      is_pinned: item.is_pinned, is_featured: item.is_featured || false, is_published: item.is_published
     });
     setEditing(item.id);
     setShowForm(true);
@@ -305,14 +309,18 @@ const NewsTab = () => {
             <ImageUploader value={form.image_url} onChange={(url) => setForm({ ...form, image_url: url })} testId="news-image" />
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
             <label className="flex items-center gap-2 font-body text-xs text-text-secondary cursor-pointer">
               <input type="checkbox" checked={form.is_pinned} onChange={(e) => setForm({ ...form, is_pinned: e.target.checked })} data-testid="news-pinned-checkbox" />
-              Pin Article
+              📌 Pin Article
+            </label>
+            <label className="flex items-center gap-2 font-body text-xs text-text-secondary cursor-pointer">
+              <input type="checkbox" checked={form.is_featured} onChange={(e) => setForm({ ...form, is_featured: e.target.checked })} data-testid="news-featured-checkbox" />
+              ⭐ Feature on Homepage
             </label>
             <label className="flex items-center gap-2 font-body text-xs text-text-secondary cursor-pointer">
               <input type="checkbox" checked={form.is_published} onChange={(e) => setForm({ ...form, is_published: e.target.checked })} data-testid="news-published-checkbox" />
-              Published
+              ✅ Published
             </label>
           </div>
 

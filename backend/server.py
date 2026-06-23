@@ -271,10 +271,11 @@ class EventRegistrationRequest(BaseModel):
 class NewsRequest(BaseModel):
     title: str
     content: str
-    category: str  # patch_notes, new_heroes, new_skins, events, esports, game_updates
+    category: str  # patch_notes, new_heroes, hero_revamps, new_skins, events, tournaments, mlbb_esports, collaborations, game_updates, community_news
     image_url: Optional[str] = None
     source_url: Optional[str] = None
     is_pinned: bool = False
+    is_featured: bool = False
     is_published: bool = True
 
 class ProductRequest(BaseModel):
@@ -601,11 +602,34 @@ async def update_registration_status(reg_id: str, status: str, request: Request)
 
 # ============ NEWS ============
 @api_router.get("/news")
-async def get_news(category: Optional[str] = None):
+async def get_news(category: Optional[str] = None, search: Optional[str] = None, featured: Optional[bool] = None, limit: int = 100):
     query = {"is_published": True}
-    if category:
+    if category and category != "all":
         query["category"] = category
-    news = await db.news.find(query).sort([("is_pinned", -1), ("created_at", -1)]).to_list(100)
+    if featured is not None:
+        query["is_featured"] = featured
+    if search and len(search.strip()) >= 2:
+        q_regex = {"$regex": search.strip(), "$options": "i"}
+        query["$or"] = [{"title": q_regex}, {"content": q_regex}, {"category": q_regex}]
+    news = await db.news.find(query).sort([("is_pinned", -1), ("is_featured", -1), ("created_at", -1)]).to_list(limit)
+    for n in news:
+        n["id"] = str(n.pop("_id"))
+    return news
+
+@api_router.get("/news/featured")
+async def get_featured_news(limit: int = 5):
+    """Get featured + pinned news for homepage display."""
+    news = await db.news.find(
+        {"is_published": True, "$or": [{"is_featured": True}, {"is_pinned": True}]}
+    ).sort([("is_pinned", -1), ("is_featured", -1), ("created_at", -1)]).to_list(limit)
+    for n in news:
+        n["id"] = str(n.pop("_id"))
+    return news
+
+@api_router.get("/news/latest")
+async def get_latest_news(limit: int = 5):
+    """Get latest published news articles for homepage."""
+    news = await db.news.find({"is_published": True}).sort([("created_at", -1)]).to_list(limit)
     for n in news:
         n["id"] = str(n.pop("_id"))
     return news
@@ -961,8 +985,10 @@ import feedparser
 import re as _re
 
 MLBB_YT_CHANNEL_ID = "UCqmld-BIYME2i_ooRTo1EOg"
-MLBB_INSTAGRAM = "https://www.instagram.com/mlbb_cis/"
+MLBB_ESPORTS_CHANNEL_ID = "UCLvkHEBRTJoME-PJIFKpqfw"
+MLBB_INSTAGRAM = "https://www.instagram.com/mobilelegendsgame/"
 _feed_cache = {"data": None, "fetched_at": None}
+_esports_feed_cache = {"data": None, "fetched_at": None}
 
 @api_router.get("/feeds/mlbb-videos")
 async def get_mlbb_videos():
@@ -1008,14 +1034,58 @@ async def get_mlbb_videos():
         logger.error(f"YouTube feed error: {e}")
         return {"source": "Mobile Legends: Bang Bang", "videos": [], "error": str(e), "channel_url": f"https://www.youtube.com/channel/{MLBB_YT_CHANNEL_ID}"}
 
+@api_router.get("/feeds/mlbb-esports")
+async def get_mlbb_esports_videos():
+    """Fetch latest videos from official MLBB Esports YouTube channel (cached 30 min)."""
+    now = datetime.now(timezone.utc)
+    if _esports_feed_cache["data"] and _esports_feed_cache["fetched_at"] and (now - _esports_feed_cache["fetched_at"]).total_seconds() < 1800:
+        return _esports_feed_cache["data"]
+    try:
+        feed_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={MLBB_ESPORTS_CHANNEL_ID}"
+        feed = feedparser.parse(feed_url)
+        videos = []
+        for entry in feed.entries[:12]:
+            video_id = entry.get("yt_videoid") or entry.get("id", "").replace("yt:video:", "")
+            thumbnail = ""
+            if hasattr(entry, "media_thumbnail") and entry.media_thumbnail:
+                thumbnail = entry.media_thumbnail[0].get("url", "")
+            if not thumbnail and video_id:
+                thumbnail = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+            description = ""
+            if hasattr(entry, "media_description"):
+                description = entry.media_description
+            elif hasattr(entry, "summary"):
+                description = _re.sub(r"<[^>]+>", "", entry.summary)[:300]
+            videos.append({
+                "video_id": video_id,
+                "title": entry.title,
+                "description": description,
+                "thumbnail": thumbnail,
+                "url": entry.link,
+                "published": entry.get("published", ""),
+                "author": entry.get("author", "MLBB Esports"),
+            })
+        result = {
+            "source": "MLBB Esports (Official YouTube)",
+            "channel_url": f"https://www.youtube.com/channel/{MLBB_ESPORTS_CHANNEL_ID}",
+            "videos": videos,
+            "fetched_at": now.isoformat(),
+        }
+        _esports_feed_cache["data"] = result
+        _esports_feed_cache["fetched_at"] = now
+        return result
+    except Exception as e:
+        logger.error(f"MLBB Esports feed error: {e}")
+        return {"source": "MLBB Esports", "videos": [], "error": str(e), "channel_url": f"https://www.youtube.com/channel/{MLBB_ESPORTS_CHANNEL_ID}"}
+
 @api_router.get("/feeds/mlbb-instagram")
 async def get_mlbb_instagram():
     """Return Instagram profile info. Instagram doesn't allow reliable scraping;
     we expose the profile link and admin can manually create news items embedding posts."""
     return {
-        "source": "MLBB CIS Instagram",
+        "source": "Mobile Legends: Bang Bang Instagram",
         "profile_url": MLBB_INSTAGRAM,
-        "handle": "@mlbb_cis",
+        "handle": "@mobilelegendsgame",
         "note": "Instagram restricts automated content fetching. Click to view latest posts.",
     }
 
