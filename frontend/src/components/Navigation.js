@@ -81,8 +81,15 @@ export const Navigation = () => {
               )}
 
               {user && (
-                <Link to="/profile" data-testid="nav-profile"
+                <Link to="/chat" data-testid="nav-chat"
                   className="flex items-center gap-1 px-2 py-1.5 border border-neon-blue/40 text-neon-blue font-body text-xs uppercase tracking-wider hover:bg-neon-blue/10 transition-colors">
+                  <MessageCircle className="w-3 h-3" /> Chat
+                </Link>
+              )}
+
+              {user && (
+                <Link to="/profile" data-testid="nav-profile"
+                  className="flex items-center gap-1 px-2 py-1.5 border border-border-DEFAULT text-text-secondary font-body text-xs uppercase tracking-wider hover:text-white transition-colors">
                   <UserIcon className="w-3 h-3" /> Profile
                 </Link>
               )}
@@ -142,8 +149,14 @@ export const Navigation = () => {
                   </a>
                 )}
                 {user && (
+                  <Link to="/chat" onClick={() => setIsOpen(false)} data-testid="mobile-nav-chat"
+                    className="block px-4 py-2 border border-neon-blue/40 text-neon-blue font-body text-xs uppercase tracking-wider">
+                    Clan Chat
+                  </Link>
+                )}
+                {user && (
                   <Link to="/profile" onClick={() => setIsOpen(false)} data-testid="mobile-nav-profile"
-                    className="block px-4 py-2 border border-neon-blue text-neon-blue font-body text-xs uppercase tracking-wider">
+                    className="block px-4 py-2 border border-border-DEFAULT text-text-secondary font-body text-xs uppercase tracking-wider">
                     My Profile
                   </Link>
                 )}

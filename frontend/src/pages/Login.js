@@ -264,19 +264,6 @@ export const Login = () => {
             </button>
           </form>
 
-          {/* Default credentials hint for demo */}
-          {isLogin && (
-            <div className="mt-5 p-3 bg-neon-blue/5 border border-neon-blue/20">
-              <p className="font-body text-[10px] text-text-muted uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                <Shield className="w-3 h-3" /> Demo Accounts
-              </p>
-              <div className="space-y-1">
-                <p className="font-mono text-[10px] text-neon-red">owner@necrolink.com / Owner2024!</p>
-                <p className="font-mono text-[10px] text-neon-purple">admin@necrolink.com / Necrolink2024!</p>
-              </div>
-            </div>
-          )}
-
           <div className="mt-5 text-center">
             <Link to="/" className="font-body text-xs text-text-muted hover:text-neon-blue transition-colors">
               ← Back to Home

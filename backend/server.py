@@ -375,6 +375,10 @@ class MemberOfMonthRequest(BaseModel):
     month: str  # YYYY-MM
     reason: Optional[str] = None
 
+class ChatMessageRequest(BaseModel):
+    channel: str  # "members" or "staff"
+    message: str
+
 class DiscordSettingsRequest(BaseModel):
     invite_url: Optional[str] = None
     server_id: Optional[str] = None
@@ -1604,6 +1608,53 @@ async def startup_event():
 async def shutdown_db_client():
     if client is not None:
         client.close()
+
+# ============ CHAT ============
+@api_router.get("/chat/messages")
+async def get_chat_messages(channel: str = "members", limit: int = 60, request: Request = None):
+    user = await get_current_user(request)
+    if channel == "staff" and user.get("role") not in ("admin", "owner"):
+        raise HTTPException(status_code=403, detail="Staff channel is restricted to staff members")
+    msgs = await db.chat_messages.find({"channel": channel}).sort("created_at", 1).to_list(limit)
+    for m in msgs:
+        m.pop("_id", None)
+    return msgs
+
+@api_router.post("/chat/messages")
+async def post_chat_message(req: ChatMessageRequest, request: Request):
+    user = await get_current_user(request)
+    if req.channel not in ("members", "staff"):
+        raise HTTPException(status_code=400, detail="Invalid channel. Use 'members' or 'staff'")
+    if req.channel == "staff" and user.get("role") not in ("admin", "owner"):
+        raise HTTPException(status_code=403, detail="Staff channel is restricted to staff members")
+    if not req.message.strip():
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
+    if len(req.message) > 500:
+        raise HTTPException(status_code=400, detail="Message too long (max 500 chars)")
+    msg = {
+        "channel": req.channel,
+        "message": req.message.strip(),
+        "user_id": str(user.get("_id", user.get("id", ""))),
+        "user_name": user.get("name", "Unknown"),
+        "user_role": user.get("role", "member"),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.chat_messages.insert_one(msg)
+    msg.pop("_id", None)
+    return msg
+
+@api_router.delete("/chat/messages/{msg_id}")
+async def delete_chat_message(msg_id: str, request: Request):
+    await get_admin_user(request)
+    from bson import ObjectId
+    try:
+        oid = ObjectId(msg_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid message ID")
+    result = await db.chat_messages.delete_one({"_id": oid})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Message not found")
+    return {"message": "Deleted"}
 
 app.include_router(api_router)
 

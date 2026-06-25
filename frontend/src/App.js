@@ -4,6 +4,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Navigation } from './components/Navigation';
 import { Footer } from './components/Footer';
+import { AIAssistant } from './components/AIAssistant';
 import { Home } from './pages/Home';
 import { About } from './pages/About';
 import { Members } from './pages/Members';
@@ -14,6 +15,7 @@ import { News } from './pages/News';
 import { Store } from './pages/Store';
 import { Gallery } from './pages/Gallery';
 import { Profile } from './pages/Profile';
+import { Chat } from './pages/Chat';
 import { AdminDashboard } from './pages/AdminDashboard';
 import '@/App.css';
 
@@ -34,6 +36,7 @@ function App() {
               <Route path="/store" element={<Store />} />
               <Route path="/join" element={<JoinUs />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/chat" element={<Chat />} />
               <Route
                 path="/profile"
                 element={
@@ -54,6 +57,7 @@ function App() {
             </Routes>
           </main>
           <Footer />
+          <AIAssistant />
         </div>
       </BrowserRouter>
     </AuthProvider>
