@@ -859,10 +859,83 @@ const UsersTab = () => {
   );
 };
 
+// =============== SETTINGS TAB (OWNER ONLY) ===============
+const SettingsTab = () => {
+  const [discord, setDiscord] = useState({ invite_url: '', server_id: '', enabled: false });
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    axios.get(`${API}/discord-settings`).then(r => setDiscord(r.data)).catch(() => {});
+  }, []);
+
+  const saveDiscord = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await axios.put(`${API}/discord-settings`, discord, { withCredentials: true });
+      setMsg('Discord settings saved!');
+      setTimeout(() => setMsg(''), 3000);
+    } catch (err) {
+      setMsg('Error: ' + (err.response?.data?.detail || err.message));
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div data-testid="settings-tab-content" className="space-y-6">
+      <div className="bg-darknet-surface border border-neon-purple/50 p-6">
+        <h2 className="font-heading text-lg font-bold text-neon-purple uppercase mb-4 flex items-center gap-2">
+          <Shield className="w-4 h-4" /> Discord Integration
+        </h2>
+        {msg && <div className={`p-3 mb-4 font-body text-sm border ${msg.startsWith('Error') ? 'border-neon-red text-neon-red bg-neon-red/10' : 'border-neon-blue text-neon-blue bg-neon-blue/10'}`}>{msg}</div>}
+        <form onSubmit={saveDiscord} className="space-y-3">
+          <div>
+            <label className="font-body text-xs text-text-muted mb-1 block uppercase tracking-wider">Discord Invite URL</label>
+            <input type="url" value={discord.invite_url} onChange={(e) => setDiscord({ ...discord, invite_url: e.target.value })}
+              placeholder="https://discord.gg/yourclan"
+              className="w-full bg-darknet-terminal border border-border-DEFAULT px-3 py-2 font-body text-sm text-white focus:border-neon-blue focus:outline-none" />
+          </div>
+          <div>
+            <label className="font-body text-xs text-text-muted mb-1 block uppercase tracking-wider">Discord Server ID</label>
+            <input type="text" value={discord.server_id} onChange={(e) => setDiscord({ ...discord, server_id: e.target.value })}
+              placeholder="Your Discord server ID"
+              className="w-full bg-darknet-terminal border border-border-DEFAULT px-3 py-2 font-body text-sm text-white focus:border-neon-blue focus:outline-none" />
+          </div>
+          <label className="flex items-center gap-2 font-body text-xs text-text-secondary cursor-pointer">
+            <input type="checkbox" checked={discord.enabled} onChange={(e) => setDiscord({ ...discord, enabled: e.target.checked })} />
+            Show Discord widget on homepage
+          </label>
+          <button type="submit" disabled={saving} className="px-6 py-2 bg-neon-purple border border-neon-purple text-white font-body text-xs uppercase tracking-wider disabled:opacity-50">
+            {saving ? 'Saving...' : 'Save Discord Settings'}
+          </button>
+        </form>
+      </div>
+
+      <div className="bg-darknet-surface border border-neon-red/30 p-6">
+        <h2 className="font-heading text-lg font-bold text-neon-red uppercase mb-3 flex items-center gap-2">
+          <UserCog className="w-4 h-4" /> Owner Info
+        </h2>
+        <div className="space-y-2 font-body text-sm text-text-secondary">
+          <p>You have <span className="text-neon-red font-bold">Owner</span> privileges — the highest access level.</p>
+          <p>Owner-only capabilities:</p>
+          <ul className="list-disc list-inside space-y-1 text-xs text-text-muted ml-2">
+            <li>Promote/demote members to Admin or Owner</li>
+            <li>Delete user accounts</li>
+            <li>Access the Users tab</li>
+            <li>Configure site settings</li>
+            <li>Set Discord integration</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // =============== MAIN DASHBOARD ===============
 export const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('stats');
   const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -874,44 +947,74 @@ export const AdminDashboard = () => {
       const { data } = await axios.get(`${API}/stats`, { withCredentials: true });
       setStats(data);
     } catch (e) { console.error(e); }
+    finally { setLoading(false); }
   };
+
+  const isOwner = user?.role === 'owner';
 
   const tabs = [
     { id: 'stats', label: 'Overview', icon: BarChart3 },
+    { id: 'applications', label: 'Applications', icon: FileText, badge: stats?.pending_applications },
     { id: 'events', label: 'Events', icon: Calendar },
-    { id: 'registrations', label: 'Registrations', icon: Users },
+    { id: 'registrations', label: 'Registrations', icon: Users, badge: stats?.pending_registrations },
     { id: 'news', label: 'News', icon: Newspaper },
     { id: 'gallery', label: 'Gallery', icon: ImageIcon },
     { id: 'products', label: 'Products', icon: ShoppingBag },
-    { id: 'orders', label: 'Orders', icon: Package },
-    { id: 'applications', label: 'Applications', icon: FileText },
+    { id: 'orders', label: 'Orders', icon: Package, badge: stats?.pending_orders },
     { id: 'announcements', label: 'Announcements', icon: Megaphone },
-    ...(user?.role === 'owner' ? [{ id: 'users', label: 'Users', icon: UserCog }] : []),
+    ...(isOwner ? [
+      { id: 'users', label: 'Users', icon: UserCog, badge: stats?.users },
+      { id: 'settings', label: 'Settings', icon: Shield },
+    ] : []),
   ];
 
   const statCards = stats ? [
-    { label: 'Pending Apps', value: stats.pending_applications, color: 'text-neon-blue', testId: 'stat-pending-apps' },
-    { label: 'Upcoming Events', value: stats.upcoming_events, color: 'text-neon-purple', testId: 'stat-upcoming-events' },
-    { label: 'Ongoing Events', value: stats.ongoing_events, color: 'text-neon-red', testId: 'stat-ongoing-events' },
-    { label: 'Pending Regs', value: stats.pending_registrations, color: 'text-yellow-400', testId: 'stat-pending-regs' },
-    { label: 'Pending Orders', value: stats.pending_orders, color: 'text-orange-400', testId: 'stat-pending-orders' },
-    { label: 'Total Members', value: stats.members, color: 'text-neon-blue', testId: 'stat-members' },
-    { label: 'News Articles', value: stats.news_articles, color: 'text-neon-purple', testId: 'stat-news' },
-    { label: 'Active Products', value: stats.products, color: 'text-neon-red', testId: 'stat-products' },
+    { label: 'Total Members', value: stats.members, color: 'text-neon-blue', border: 'border-neon-blue/30', bg: 'bg-neon-blue/5', tab: 'users', testId: 'stat-members' },
+    { label: 'Pending Apps', value: stats.pending_applications, color: 'text-yellow-400', border: 'border-yellow-400/30', bg: 'bg-yellow-400/5', tab: 'applications', testId: 'stat-pending-apps' },
+    { label: 'Upcoming Events', value: stats.upcoming_events, color: 'text-neon-purple', border: 'border-neon-purple/30', bg: 'bg-neon-purple/5', tab: 'events', testId: 'stat-upcoming-events' },
+    { label: 'Ongoing Events', value: stats.ongoing_events, color: 'text-neon-red', border: 'border-neon-red/30', bg: 'bg-neon-red/5', tab: 'events', testId: 'stat-ongoing-events' },
+    { label: 'Pending Regs', value: stats.pending_registrations, color: 'text-orange-400', border: 'border-orange-400/30', bg: 'bg-orange-400/5', tab: 'registrations', testId: 'stat-pending-regs' },
+    { label: 'Pending Orders', value: stats.pending_orders, color: 'text-neon-red', border: 'border-neon-red/30', bg: 'bg-neon-red/5', tab: 'orders', testId: 'stat-pending-orders' },
+    { label: 'News Articles', value: stats.news_articles, color: 'text-neon-purple', border: 'border-neon-purple/30', bg: 'bg-neon-purple/5', tab: 'news', testId: 'stat-news' },
+    { label: 'Active Products', value: stats.products, color: 'text-neon-blue', border: 'border-neon-blue/30', bg: 'bg-neon-blue/5', tab: 'products', testId: 'stat-products' },
   ] : [];
+
+  const roleBadge = user?.role === 'owner'
+    ? { label: 'Owner', cls: 'border-neon-red text-neon-red bg-neon-red/10' }
+    : { label: 'Admin', cls: 'border-neon-purple text-neon-purple bg-neon-purple/10' };
 
   return (
     <div className="min-h-screen bg-darknet-bg py-8 px-4">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-6">
-          <h1 className="font-heading text-3xl sm:text-4xl font-black text-neon-purple uppercase tracking-tight mb-1" data-testid="admin-dashboard-title">
-            Admin Dashboard
-          </h1>
-          <p className="font-body text-sm text-text-secondary">Welcome back, {user?.name}</p>
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <h1 className="font-heading text-3xl sm:text-4xl font-black text-neon-purple uppercase tracking-tight" data-testid="admin-dashboard-title">
+                {isOwner ? 'Owner' : 'Admin'} Dashboard
+              </h1>
+              <span className={`px-2 py-0.5 text-[10px] font-body uppercase tracking-widest border ${roleBadge.cls}`}>
+                {roleBadge.label}
+              </span>
+            </div>
+            <p className="font-body text-sm text-text-secondary">Welcome back, <span className="text-white">{user?.name}</span></p>
+          </div>
+          {stats && (
+            <div className="flex gap-3 text-center">
+              <div className="bg-darknet-surface border border-border-DEFAULT px-4 py-2">
+                <p className="font-heading text-xl font-bold text-neon-blue">{stats.members}</p>
+                <p className="font-body text-[10px] text-text-muted uppercase">Members</p>
+              </div>
+              <div className="bg-darknet-surface border border-border-DEFAULT px-4 py-2">
+                <p className="font-heading text-xl font-bold text-yellow-400">{stats.pending_applications + stats.pending_registrations + stats.pending_orders}</p>
+                <p className="font-body text-[10px] text-text-muted uppercase">Pending</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Tabs */}
-        <div className="flex flex-wrap gap-2 mb-6 border-b border-border-DEFAULT pb-2">
+        <div className="flex flex-wrap gap-1 mb-6 border-b border-border-DEFAULT pb-2 overflow-x-auto">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
@@ -919,14 +1022,19 @@ export const AdminDashboard = () => {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 data-testid={`tab-${tab.id === 'stats' ? 'overview' : tab.id}`}
-                className={`flex items-center gap-2 px-3 py-2 font-body text-xs uppercase tracking-wider transition-colors ${
+                className={`flex items-center gap-1.5 px-3 py-2 font-body text-xs uppercase tracking-wider transition-all whitespace-nowrap relative ${
                   activeTab === tab.id
-                    ? 'text-neon-blue border-b-2 border-neon-blue'
+                    ? 'text-neon-blue border-b-2 border-neon-blue -mb-0.5'
                     : 'text-text-muted hover:text-neon-blue'
                 }`}
               >
                 <Icon className="w-3 h-3" />
                 {tab.label}
+                {tab.badge > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 text-[9px] bg-neon-red text-white rounded-full font-bold leading-none">
+                    {tab.badge}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -934,34 +1042,89 @@ export const AdminDashboard = () => {
 
         {/* Tab content */}
         <div>
-          {activeTab === 'stats' && stats && (
+          {activeTab === 'stats' && (
             <div data-testid="stats-tab-content">
-              <h2 className="font-heading text-xl font-bold text-neon-blue uppercase mb-6">Overview</h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {statCards.map((card) => (
-                  <motion.div
-                    key={card.label}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-darknet-surface border border-border-DEFAULT p-4"
-                    data-testid={card.testId}
-                  >
-                    <p className={`font-heading text-3xl font-bold ${card.color}`}>{card.value}</p>
-                    <p className="font-body text-[10px] text-text-muted uppercase tracking-wider mt-1">{card.label}</p>
-                  </motion.div>
-                ))}
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="font-heading text-xl font-bold text-neon-blue uppercase">Overview</h2>
+                <button onClick={fetchStats} className="font-body text-xs text-text-muted hover:text-neon-blue uppercase tracking-wider">↻ Refresh</button>
               </div>
+              {loading ? (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[...Array(8)].map((_, i) => (
+                    <div key={i} className="bg-darknet-surface border border-border-DEFAULT p-4 animate-pulse h-20" />
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    {statCards.map((card, i) => (
+                      <motion.button
+                        key={card.label}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.05 }}
+                        onClick={() => card.tab && setActiveTab(card.tab)}
+                        className={`${card.bg} border ${card.border} p-4 text-left hover:border-opacity-70 transition-all cursor-pointer group`}
+                        data-testid={card.testId}
+                      >
+                        <p className={`font-heading text-3xl font-bold ${card.color}`}>{card.value}</p>
+                        <p className="font-body text-[10px] text-text-muted uppercase tracking-wider mt-1 group-hover:text-white transition-colors">{card.label}</p>
+                      </motion.button>
+                    ))}
+                  </div>
+
+                  {/* Quick Actions */}
+                  <div className="bg-darknet-surface border border-neon-purple/30 p-5">
+                    <h3 className="font-heading text-sm font-bold text-neon-purple uppercase mb-4">Quick Actions</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {[
+                        { label: 'New Event', tab: 'events', color: 'neon-purple' },
+                        { label: 'New Article', tab: 'news', color: 'neon-blue' },
+                        { label: 'Review Apps', tab: 'applications', color: 'yellow-400', count: stats?.pending_applications },
+                        { label: 'Process Orders', tab: 'orders', color: 'neon-red', count: stats?.pending_orders },
+                      ].map((a) => (
+                        <button
+                          key={a.label}
+                          onClick={() => setActiveTab(a.tab)}
+                          className={`flex items-center justify-between px-4 py-3 bg-darknet-terminal border border-border-DEFAULT hover:border-${a.color} font-body text-xs uppercase tracking-wider text-text-secondary hover:text-white transition-all`}
+                        >
+                          <span>{a.label}</span>
+                          {a.count > 0 && <span className="px-1.5 py-0.5 bg-neon-red text-white text-[9px] rounded-full font-bold">{a.count}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {isOwner && (
+                    <div className="mt-4 bg-neon-red/5 border border-neon-red/30 p-4">
+                      <p className="font-body text-xs text-neon-red uppercase tracking-wider font-bold mb-2 flex items-center gap-1">
+                        <Shield className="w-3 h-3" /> Owner Privileges Active
+                      </p>
+                      <p className="font-body text-xs text-text-muted">You can manage all users, change roles, and configure site settings.</p>
+                      <div className="flex gap-2 mt-3">
+                        <button onClick={() => setActiveTab('users')} className="px-3 py-1.5 bg-neon-red/10 border border-neon-red text-neon-red font-body text-xs uppercase">
+                          Manage Users ({stats?.users})
+                        </button>
+                        <button onClick={() => setActiveTab('settings')} className="px-3 py-1.5 bg-neon-purple/10 border border-neon-purple text-neon-purple font-body text-xs uppercase">
+                          Site Settings
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
+          {activeTab === 'applications' && <ApplicationsTab />}
           {activeTab === 'events' && <EventsTab />}
           {activeTab === 'registrations' && <RegistrationsTab />}
           {activeTab === 'news' && <NewsTab />}
           {activeTab === 'gallery' && <GalleryTab />}
           {activeTab === 'products' && <ProductsTab />}
           {activeTab === 'orders' && <OrdersTab />}
-          {activeTab === 'applications' && <ApplicationsTab />}
           {activeTab === 'announcements' && <AnnouncementsTab />}
-          {activeTab === 'users' && user?.role === 'owner' && <UsersTab />}
+          {activeTab === 'users' && isOwner && <UsersTab />}
+          {activeTab === 'settings' && isOwner && <SettingsTab />}
         </div>
       </div>
     </div>

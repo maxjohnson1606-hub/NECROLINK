@@ -36,33 +36,41 @@ import requests
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-# Short serverSelectionTimeoutMS so startup doesn't block for 30s per operation
-client = AsyncIOMotorClient(mongo_url, tlsInsecure=True, serverSelectionTimeoutMS=5000, connectTimeoutMS=5000, socketTimeoutMS=5000)
-db = client[os.environ['DB_NAME']]
-
-# ── Sync connectivity test ── switch to in-memory DB if Atlas is unreachable ──
+# MongoDB connection — fall back to in-memory DB if MONGO_URL is not set or unreachable
 _USING_MEMDB = False
-try:
-    import pymongo as _pymongo
-    _sc = _pymongo.MongoClient(
-        mongo_url, tlsInsecure=True,
-        serverSelectionTimeoutMS=2500, connectTimeoutMS=2500, socketTimeoutMS=2500
-    )
-    _sc.admin.command('ping')
-    _sc.close()
-    print("✅ [NECROLINK] MongoDB Atlas connected successfully")
-except Exception as _mongo_err:
-    print(f"⚠️  [NECROLINK] MongoDB unavailable ({type(_mongo_err).__name__}) — loading in-memory database")
+mongo_url = os.environ.get('MONGO_URL', '')
+_DB_NAME = os.environ.get('DB_NAME', 'necrolink')
+
+if mongo_url:
+    client = AsyncIOMotorClient(mongo_url, tlsInsecure=True, serverSelectionTimeoutMS=5000, connectTimeoutMS=5000, socketTimeoutMS=5000)
+    db = client[_DB_NAME]
+    try:
+        import pymongo as _pymongo
+        _sc = _pymongo.MongoClient(
+            mongo_url, tlsInsecure=True,
+            serverSelectionTimeoutMS=2500, connectTimeoutMS=2500, socketTimeoutMS=2500
+        )
+        _sc.admin.command('ping')
+        _sc.close()
+        print("✅ [NECROLINK] MongoDB Atlas connected successfully")
+    except Exception as _mongo_err:
+        print(f"⚠️  [NECROLINK] MongoDB unreachable ({type(_mongo_err).__name__}) — loading in-memory database")
+        from memdb import create_mem_db as _create_mem_db
+        db = _create_mem_db()
+        _USING_MEMDB = True
+        print("✅ [NECROLINK] In-memory database loaded with full seed data")
+else:
+    print("⚠️  [NECROLINK] MONGO_URL not set — loading in-memory database")
     from memdb import create_mem_db as _create_mem_db
+    # Provide a dummy motor client (not used when _USING_MEMDB=True)
+    client = None
     db = _create_mem_db()
     _USING_MEMDB = True
     print("✅ [NECROLINK] In-memory database loaded with full seed data")
 
 # JWT settings
 JWT_ALGORITHM = "HS256"
-JWT_SECRET = os.environ.get('JWT_SECRET')
+JWT_SECRET = os.environ.get('JWT_SECRET') or "necrolink-default-secret-change-in-production-2024"
 
 # Object Storage settings
 STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
@@ -1594,7 +1602,8 @@ async def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    client.close()
+    if client is not None:
+        client.close()
 
 app.include_router(api_router)
 
