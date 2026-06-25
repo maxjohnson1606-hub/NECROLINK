@@ -1656,15 +1656,27 @@ async def shutdown_db_client():
         client.close()
 
 # ============ CHAT ============
+def _serialize_msg(m: dict) -> dict:
+    """Return a chat message with a string 'id' field and no raw _id."""
+    m = dict(m)
+    raw = m.pop("_id", None)
+    m["id"] = str(raw) if raw is not None else ""
+    return m
+
 @api_router.get("/chat/messages")
-async def get_chat_messages(channel: str = "members", limit: int = 60, request: Request = None):
+async def get_chat_messages(channel: str = "members", limit: int = 80, request: Request = None):
     user = await get_current_user(request)
     if channel == "staff" and user.get("role") not in ("admin", "owner"):
         raise HTTPException(status_code=403, detail="Staff channel is restricted to staff members")
     msgs = await db.chat_messages.find({"channel": channel}).sort("created_at", 1).to_list(limit)
-    for m in msgs:
-        m.pop("_id", None)
-    return msgs
+    return [_serialize_msg(m) for m in msgs]
+
+@api_router.get("/chat/all")
+async def get_all_chat_messages(request: Request, limit: int = 100):
+    """Admin: fetch messages from all channels."""
+    await get_admin_user(request)
+    msgs = await db.chat_messages.find({}).sort("created_at", -1).to_list(limit)
+    return [_serialize_msg(m) for m in msgs]
 
 @api_router.post("/chat/messages")
 async def post_chat_message(req: ChatMessageRequest, request: Request):
@@ -1685,7 +1697,8 @@ async def post_chat_message(req: ChatMessageRequest, request: Request):
         "user_role": user.get("role", "member"),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    await db.chat_messages.insert_one(msg)
+    result = await db.chat_messages.insert_one(msg)
+    msg["id"] = str(result.inserted_id)
     msg.pop("_id", None)
     return msg
 
@@ -1701,6 +1714,16 @@ async def delete_chat_message(msg_id: str, request: Request):
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Message not found")
     return {"message": "Deleted"}
+
+@api_router.delete("/chat/clear/{channel}")
+async def clear_chat_channel(channel: str, request: Request):
+    """Admin: delete all messages in a channel."""
+    await get_admin_user(request)
+    if channel not in ("members", "staff", "all"):
+        raise HTTPException(status_code=400, detail="Invalid channel")
+    query = {} if channel == "all" else {"channel": channel}
+    result = await db.chat_messages.delete_many(query)
+    return {"message": f"Cleared {result.deleted_count} messages"}
 
 app.include_router(api_router)
 
