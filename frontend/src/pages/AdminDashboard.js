@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, FileText, Megaphone, Plus, Trash2, CheckCircle, XCircle,
   Calendar, Newspaper, ShoppingBag, BarChart3, Edit, Upload, Package, Pin,
-  Image as ImageIcon, UserCog, Shield
+  Image as ImageIcon, UserCog, Shield, Key, X, Save, AlertTriangle
 } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
@@ -784,8 +784,133 @@ const GalleryTab = () => {
 };
 
 // =============== USERS TAB (OWNER ONLY) ===============
+const ALL_PERMISSIONS = [
+  { key: 'manage_applications', label: 'Manage Applications', desc: 'Review and approve/reject join requests' },
+  { key: 'manage_events', label: 'Manage Events', desc: 'Create, edit, and delete clan events' },
+  { key: 'manage_registrations', label: 'Manage Registrations', desc: 'Approve event registrations' },
+  { key: 'manage_news', label: 'Manage News', desc: 'Write and publish news articles' },
+  { key: 'manage_gallery', label: 'Manage Gallery', desc: 'Upload and manage gallery images' },
+  { key: 'manage_products', label: 'Manage Products', desc: 'Add and manage store products' },
+  { key: 'manage_orders', label: 'Manage Orders', desc: 'Process and fulfill orders' },
+  { key: 'manage_announcements', label: 'Manage Announcements', desc: 'Post clan announcements' },
+  { key: 'manage_members', label: 'Manage Members', desc: 'Edit member profiles and ranks' },
+  { key: 'moderate_chat', label: 'Moderate Chat', desc: 'Delete chat messages, access staff chat' },
+];
+
+const PermissionsModal = ({ user: targetUser, onClose, onSave }) => {
+  const defaultPerms = ALL_PERMISSIONS.reduce((acc, p) => ({ ...acc, [p.key]: true }), {});
+  const [perms, setPerms] = useState({ ...defaultPerms, ...(targetUser.permissions || {}) });
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const toggle = (key) => setPerms(p => ({ ...p, [key]: !p[key] }));
+  const setAll = (val) => setPerms(ALL_PERMISSIONS.reduce((acc, p) => ({ ...acc, [p.key]: val }), {}));
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await axios.patch(`${API}/users/${targetUser.id}/permissions`, perms, { withCredentials: true });
+      setMsg('Permissions saved!');
+      onSave(targetUser.id, perms);
+      setTimeout(onClose, 1200);
+    } catch (err) {
+      setMsg('Error: ' + (err.response?.data?.detail || err.message));
+    } finally { setSaving(false); }
+  };
+
+  const enabledCount = Object.values(perms).filter(Boolean).length;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="bg-darknet-bg border border-neon-purple/50 w-full max-w-lg shadow-2xl"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-neon-purple/30 bg-neon-purple/5">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-neon-purple/20 border border-neon-purple flex items-center justify-center">
+              <Key className="w-4 h-4 text-neon-purple" />
+            </div>
+            <div>
+              <p className="font-heading text-sm font-bold text-neon-purple uppercase">Admin Privileges</p>
+              <p className="font-body text-xs text-text-muted">{targetUser.name} · {enabledCount}/{ALL_PERMISSIONS.length} enabled</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-text-muted hover:text-white transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-5 space-y-2 max-h-96 overflow-y-auto">
+          <div className="flex items-center justify-between mb-3">
+            <p className="font-body text-xs text-text-muted uppercase tracking-wider">Toggle permissions for this admin</p>
+            <div className="flex gap-2">
+              <button onClick={() => setAll(true)} className="font-body text-[10px] text-neon-blue hover:underline uppercase">All On</button>
+              <span className="text-border-DEFAULT">|</span>
+              <button onClick={() => setAll(false)} className="font-body text-[10px] text-neon-red hover:underline uppercase">All Off</button>
+            </div>
+          </div>
+          {ALL_PERMISSIONS.map((p) => (
+            <label key={p.key} className={`flex items-start gap-3 p-3 cursor-pointer border transition-all ${
+              perms[p.key] ? 'border-neon-purple/40 bg-neon-purple/5' : 'border-border-DEFAULT bg-darknet-surface opacity-60'
+            }`}>
+              <div className="mt-0.5 flex-shrink-0">
+                <input
+                  type="checkbox"
+                  checked={!!perms[p.key]}
+                  onChange={() => toggle(p.key)}
+                  className="sr-only"
+                />
+                <div className={`w-4 h-4 border flex items-center justify-center transition-all ${
+                  perms[p.key] ? 'bg-neon-purple border-neon-purple' : 'border-border-DEFAULT bg-darknet-terminal'
+                }`}>
+                  {perms[p.key] && <CheckCircle className="w-3 h-3 text-white" />}
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`font-body text-xs font-bold uppercase tracking-wider ${perms[p.key] ? 'text-white' : 'text-text-muted'}`}>
+                  {p.label}
+                </p>
+                <p className="font-body text-[10px] text-text-muted mt-0.5">{p.desc}</p>
+              </div>
+            </label>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-4 border-t border-neon-purple/30 flex items-center justify-between gap-3">
+          {msg ? (
+            <p className={`font-body text-xs ${msg.startsWith('Error') ? 'text-neon-red' : 'text-neon-blue'}`}>{msg}</p>
+          ) : (
+            <p className="font-body text-[10px] text-text-muted">
+              <AlertTriangle className="w-3 h-3 inline mr-1 text-yellow-400" />
+              Changes apply immediately on next login
+            </p>
+          )}
+          <div className="flex gap-2">
+            <button onClick={onClose} className="px-4 py-2 border border-border-DEFAULT text-text-muted font-body text-xs uppercase hover:text-white transition-colors">
+              Cancel
+            </button>
+            <button onClick={save} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 bg-neon-purple/10 border border-neon-purple text-neon-purple font-body text-xs uppercase tracking-wider hover:bg-neon-purple/20 disabled:opacity-50 transition-all">
+              <Save className="w-3.5 h-3.5" />
+              {saving ? 'Saving...' : 'Save Privileges'}
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 const UsersTab = () => {
   const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [permTarget, setPermTarget] = useState(null);
+  const [search, setSearch] = useState('');
+  const [filterRole, setFilterRole] = useState('all');
   const { user: currentUser } = useAuth();
 
   const fetchUsers = async () => {
@@ -793,6 +918,7 @@ const UsersTab = () => {
       const { data } = await axios.get(`${API}/users`, { withCredentials: true });
       setUsers(data);
     } catch (e) { console.error(e); }
+    finally { setLoading(false); }
   };
   useEffect(() => { fetchUsers(); }, []);
 
@@ -805,56 +931,163 @@ const UsersTab = () => {
     }
   };
 
-  const deleteUser = async (id) => {
-    if (!window.confirm('Permanently delete this user?')) return;
+  const deleteUser = async (id, name) => {
+    if (!window.confirm(`Permanently delete ${name}? This cannot be undone.`)) return;
     try {
       await axios.delete(`${API}/users/${id}`, { withCredentials: true });
-      fetchUsers();
+      setUsers(prev => prev.filter(u => u.id !== id));
     } catch (err) {
       alert('Error: ' + (err.response?.data?.detail || err.message));
     }
   };
 
+  const handlePermsSave = (id, newPerms) => {
+    setUsers(prev => prev.map(u => u.id === id ? { ...u, permissions: newPerms } : u));
+  };
+
+  const filtered = users.filter(u => {
+    const matchSearch = !search || u.name?.toLowerCase().includes(search.toLowerCase()) || u.email?.toLowerCase().includes(search.toLowerCase());
+    const matchRole = filterRole === 'all' || u.role === filterRole;
+    return matchSearch && matchRole;
+  });
+
+  const roleCount = { owner: 0, admin: 0, member: 0 };
+  users.forEach(u => { if (roleCount[u.role] !== undefined) roleCount[u.role]++; });
+
   return (
     <div data-testid="users-tab-content">
-      <h2 className="font-heading text-xl font-bold text-neon-red uppercase mb-6 flex items-center gap-2">
-        <Shield className="w-5 h-5" /> User Management ({users.length})
-      </h2>
-      <div className="space-y-3">
-        {users.map((u) => (
-          <div key={u.id} className="bg-darknet-surface border border-border-DEFAULT p-4 flex items-center justify-between gap-3" data-testid={`admin-user-${u.id}`}>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className="font-heading text-sm font-bold text-white uppercase">{u.name || 'Unnamed'}</h3>
-                <span className={`px-2 py-0.5 text-[10px] font-body uppercase tracking-wider border ${
-                  u.role === 'owner' ? 'border-neon-red text-neon-red' :
-                  u.role === 'admin' ? 'border-neon-purple text-neon-purple' :
-                  'border-neon-blue text-neon-blue'
-                }`}>{u.role}</span>
-              </div>
-              <p className="font-body text-xs text-text-secondary">{u.email}</p>
-              {u.game_name && <p className="font-body text-[10px] text-text-muted">IGN: {u.game_name}</p>}
-            </div>
-            {u.id !== currentUser?._id && (
-              <div className="flex items-center gap-2">
-                <select
-                  value={u.role}
-                  onChange={(e) => updateRole(u.id, e.target.value)}
-                  data-testid={`role-select-${u.id}`}
-                  className="bg-darknet-terminal border border-border-DEFAULT px-2 py-1 font-body text-xs text-white focus:border-neon-blue focus:outline-none"
-                >
-                  <option value="member">Member</option>
-                  <option value="admin">Admin</option>
-                  <option value="owner">Owner</option>
-                </select>
-                <button onClick={() => deleteUser(u.id)} data-testid={`delete-user-${u.id}`} className="p-2 text-neon-red hover:bg-neon-red/10">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            )}
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div>
+          <h2 className="font-heading text-xl font-bold text-neon-red uppercase flex items-center gap-2">
+            <UserCog className="w-5 h-5" /> User Management
+          </h2>
+          <div className="flex gap-3 mt-1">
+            {[['all', 'All', users.length], ['owner', 'Owners', roleCount.owner], ['admin', 'Admins', roleCount.admin], ['member', 'Members', roleCount.member]].map(([val, label, count]) => (
+              <button key={val} onClick={() => setFilterRole(val)}
+                className={`font-body text-[10px] uppercase tracking-wider transition-colors ${filterRole === val ? 'text-neon-red' : 'text-text-muted hover:text-white'}`}>
+                {label} <span className="opacity-70">({count})</span>
+              </button>
+            ))}
           </div>
-        ))}
+        </div>
+        <input
+          type="text"
+          placeholder="Search by name or email..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="w-full sm:w-64 bg-darknet-terminal border border-border-DEFAULT px-3 py-2 font-body text-xs text-white focus:border-neon-red focus:outline-none placeholder:text-text-muted/50"
+        />
       </div>
+
+      {loading ? (
+        <div className="space-y-3">
+          {[...Array(4)].map((_, i) => <div key={i} className="h-20 bg-darknet-surface border border-border-DEFAULT animate-pulse" />)}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map((u) => {
+            const isMe = u.id === currentUser?._id || u.id === currentUser?.id;
+            const permCount = u.permissions ? Object.values(u.permissions).filter(Boolean).length : 0;
+            return (
+              <motion.div
+                key={u.id}
+                layout
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`border p-4 transition-all ${
+                  u.role === 'owner' ? 'border-neon-red/40 bg-neon-red/5' :
+                  u.role === 'admin' ? 'border-neon-purple/30 bg-neon-purple/5' :
+                  'border-border-DEFAULT bg-darknet-surface'
+                }`}
+                data-testid={`admin-user-${u.id}`}
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                  {/* Avatar & Info */}
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className={`w-10 h-10 flex items-center justify-center text-sm font-bold border flex-shrink-0 ${
+                      u.role === 'owner' ? 'bg-neon-red/20 border-neon-red text-neon-red' :
+                      u.role === 'admin' ? 'bg-neon-purple/20 border-neon-purple text-neon-purple' :
+                      'bg-neon-blue/20 border-neon-blue text-neon-blue'
+                    }`}>
+                      {(u.name || '?')[0].toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-heading text-sm font-bold text-white uppercase truncate">{u.name || 'Unnamed'}</h3>
+                        <span className={`px-2 py-0.5 text-[9px] font-body uppercase tracking-wider border flex-shrink-0 ${
+                          u.role === 'owner' ? 'border-neon-red text-neon-red bg-neon-red/10' :
+                          u.role === 'admin' ? 'border-neon-purple text-neon-purple bg-neon-purple/10' :
+                          'border-neon-blue text-neon-blue bg-neon-blue/10'
+                        }`}>{u.role}</span>
+                        {isMe && <span className="px-2 py-0.5 text-[9px] font-body uppercase tracking-wider border border-yellow-400 text-yellow-400 bg-yellow-400/10">You</span>}
+                      </div>
+                      <p className="font-body text-xs text-text-secondary truncate">{u.email}</p>
+                      {u.game_name && <p className="font-body text-[10px] text-text-muted">IGN: {u.game_name}</p>}
+                      {u.role === 'admin' && (
+                        <p className="font-body text-[10px] text-neon-purple/70 mt-0.5">
+                          {u.permissions ? `${permCount}/${ALL_PERMISSIONS.length} privileges enabled` : 'Full access (default)'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  {!isMe && (
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {/* Permissions editor — only for admins */}
+                      {u.role === 'admin' && (
+                        <button
+                          onClick={() => setPermTarget(u)}
+                          title="Edit admin privileges"
+                          className="flex items-center gap-1.5 px-3 py-2 border border-neon-purple/50 text-neon-purple font-body text-xs uppercase hover:bg-neon-purple/10 transition-colors"
+                        >
+                          <Key className="w-3.5 h-3.5" /> Privileges
+                        </button>
+                      )}
+                      <select
+                        value={u.role}
+                        onChange={(e) => updateRole(u.id, e.target.value)}
+                        data-testid={`role-select-${u.id}`}
+                        className="bg-darknet-terminal border border-border-DEFAULT px-2 py-2 font-body text-xs text-white focus:border-neon-blue focus:outline-none"
+                      >
+                        <option value="member">Member</option>
+                        <option value="admin">Admin</option>
+                        <option value="owner">Owner</option>
+                      </select>
+                      <button
+                        onClick={() => deleteUser(u.id, u.name)}
+                        data-testid={`delete-user-${u.id}`}
+                        title="Delete user"
+                        className="p-2 border border-neon-red/30 text-neon-red hover:bg-neon-red/10 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })}
+          {filtered.length === 0 && (
+            <div className="text-center py-12">
+              <Users className="w-8 h-8 text-text-muted mx-auto mb-2 opacity-30" />
+              <p className="font-body text-sm text-text-muted">No users found</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Permissions Modal */}
+      <AnimatePresence>
+        {permTarget && (
+          <PermissionsModal
+            user={permTarget}
+            onClose={() => setPermTarget(null)}
+            onSave={handlePermsSave}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -951,22 +1184,28 @@ export const AdminDashboard = () => {
   };
 
   const isOwner = user?.role === 'owner';
+  const perms = user?.permissions || null;
 
-  const tabs = [
-    { id: 'stats', label: 'Overview', icon: BarChart3 },
-    { id: 'applications', label: 'Applications', icon: FileText, badge: stats?.pending_applications },
-    { id: 'events', label: 'Events', icon: Calendar },
-    { id: 'registrations', label: 'Registrations', icon: Users, badge: stats?.pending_registrations },
-    { id: 'news', label: 'News', icon: Newspaper },
-    { id: 'gallery', label: 'Gallery', icon: ImageIcon },
-    { id: 'products', label: 'Products', icon: ShoppingBag },
-    { id: 'orders', label: 'Orders', icon: Package, badge: stats?.pending_orders },
-    { id: 'announcements', label: 'Announcements', icon: Megaphone },
+  // For owner: always all tabs. For admin: filter by permissions (null = full access by default)
+  const hasPerm = (key) => isOwner || !perms || perms[key] !== false;
+
+  const allTabs = [
+    { id: 'stats', label: 'Overview', icon: BarChart3, perm: null },
+    { id: 'applications', label: 'Applications', icon: FileText, badge: stats?.pending_applications, perm: 'manage_applications' },
+    { id: 'events', label: 'Events', icon: Calendar, perm: 'manage_events' },
+    { id: 'registrations', label: 'Registrations', icon: Users, badge: stats?.pending_registrations, perm: 'manage_registrations' },
+    { id: 'news', label: 'News', icon: Newspaper, perm: 'manage_news' },
+    { id: 'gallery', label: 'Gallery', icon: ImageIcon, perm: 'manage_gallery' },
+    { id: 'products', label: 'Products', icon: ShoppingBag, perm: 'manage_products' },
+    { id: 'orders', label: 'Orders', icon: Package, badge: stats?.pending_orders, perm: 'manage_orders' },
+    { id: 'announcements', label: 'Announcements', icon: Megaphone, perm: 'manage_announcements' },
     ...(isOwner ? [
-      { id: 'users', label: 'Users', icon: UserCog, badge: stats?.users },
-      { id: 'settings', label: 'Settings', icon: Shield },
+      { id: 'users', label: 'Users', icon: UserCog, badge: stats?.users, perm: null },
+      { id: 'settings', label: 'Settings', icon: Shield, perm: null },
     ] : []),
   ];
+
+  const tabs = allTabs.filter(t => t.perm === null || hasPerm(t.perm));
 
   const statCards = stats ? [
     { label: 'Total Members', value: stats.members, color: 'text-neon-blue', border: 'border-neon-blue/30', bg: 'bg-neon-blue/5', tab: 'users', testId: 'stat-members' },

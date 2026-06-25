@@ -342,7 +342,19 @@ class GalleryItemRequest(BaseModel):
     category: str = "match"  # match, mvp, team, event
 
 class UserRoleRequest(BaseModel):
-    role: str  # member, admin, owner
+    role: str
+
+class UserPermissionsRequest(BaseModel):
+    manage_events: bool = True
+    manage_registrations: bool = True
+    manage_news: bool = True
+    manage_gallery: bool = True
+    manage_products: bool = True
+    manage_orders: bool = True
+    manage_applications: bool = True
+    manage_announcements: bool = True
+    manage_members: bool = True
+    moderate_chat: bool = True  # member, admin, owner
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
@@ -1258,6 +1270,19 @@ async def get_users(request: Request):
         u["id"] = str(u.pop("_id"))
     return users
 
+DEFAULT_ADMIN_PERMISSIONS = {
+    "manage_events": True,
+    "manage_registrations": True,
+    "manage_news": True,
+    "manage_gallery": True,
+    "manage_products": True,
+    "manage_orders": True,
+    "manage_applications": True,
+    "manage_announcements": True,
+    "manage_members": True,
+    "moderate_chat": True,
+}
+
 @api_router.patch("/users/{user_id}/role")
 async def update_user_role(user_id: str, role_req: UserRoleRequest, request: Request):
     owner = await get_owner_user(request)
@@ -1266,10 +1291,31 @@ async def update_user_role(user_id: str, role_req: UserRoleRequest, request: Req
     uid = parse_object_id(user_id, "User")
     if str(uid) == owner["_id"]:
         raise HTTPException(status_code=400, detail="Cannot change your own role")
-    result = await db.users.update_one({"_id": uid}, {"$set": {"role": role_req.role}})
+    update_data = {"role": role_req.role}
+    # When promoting to admin, set default full permissions if none exist
+    existing = await db.users.find_one({"_id": uid})
+    if existing and role_req.role == "admin" and not existing.get("permissions"):
+        update_data["permissions"] = DEFAULT_ADMIN_PERMISSIONS
+    elif role_req.role == "member":
+        update_data["permissions"] = {}
+    result = await db.users.update_one({"_id": uid}, {"$set": update_data})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
     return {"message": "Role updated"}
+
+@api_router.patch("/users/{user_id}/permissions")
+async def update_user_permissions(user_id: str, perms_req: UserPermissionsRequest, request: Request):
+    await get_owner_user(request)
+    uid = parse_object_id(user_id, "User")
+    target = await db.users.find_one({"_id": uid})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target.get("role") not in ("admin", "owner"):
+        raise HTTPException(status_code=400, detail="Can only set permissions for admin users")
+    result = await db.users.update_one({"_id": uid}, {"$set": {"permissions": perms_req.model_dump()}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"message": "Permissions updated", "permissions": perms_req.model_dump()}
 
 @api_router.delete("/users/{user_id}")
 async def delete_user(user_id: str, request: Request):
