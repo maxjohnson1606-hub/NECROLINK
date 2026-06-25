@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import { ShoppingBag, Gem, X, Package } from 'lucide-react';
+import React, { useEffect, useState, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ShoppingBag, Gem, X, Package, Shirt } from 'lucide-react';
 import axios from 'axios';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -36,14 +36,15 @@ const OrderModal = ({ product, onClose, onSuccess }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" data-testid="order-modal">
-      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-darknet-surface border border-neon-purple p-6 max-w-md w-full max-h-[90vh] overflow-y-auto border-glow-purple">
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        className="bg-darknet-surface border border-neon-purple p-6 max-w-md w-full max-h-[90vh] overflow-y-auto border-glow-purple">
         <div className="flex justify-between items-start mb-4">
           <div>
-            <h2 className="font-heading text-xl font-bold text-neon-purple uppercase mb-1" data-testid="order-modal-title">Order</h2>
+            <h2 className="font-heading text-xl font-bold text-neon-purple uppercase mb-1">Order</h2>
             <p className="font-body text-sm text-text-secondary">{product.name}</p>
             <p className="font-body text-lg text-neon-blue font-bold">${product.price}</p>
           </div>
-          <button onClick={onClose} data-testid="close-order-btn" className="text-text-secondary hover:text-neon-red transition-colors">
+          <button onClick={onClose} className="text-text-secondary hover:text-neon-red transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -51,22 +52,22 @@ const OrderModal = ({ product, onClose, onSuccess }) => {
         {error && <div className="bg-neon-red/10 border border-neon-red p-3 mb-4 font-body text-xs text-neon-red">{error}</div>}
 
         <form onSubmit={handleSubmit} className="space-y-3">
-          <input type="text" data-testid="order-name" placeholder="Full Name *" required value={formData.customer_name}
+          <input type="text" placeholder="Full Name *" required value={formData.customer_name}
             onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
             className="w-full bg-darknet-terminal border border-border-DEFAULT px-3 py-2 font-body text-sm text-white focus:border-neon-blue focus:outline-none" />
-          <input type="email" data-testid="order-email" placeholder="Email *" required value={formData.customer_email}
+          <input type="email" placeholder="Email *" required value={formData.customer_email}
             onChange={(e) => setFormData({ ...formData, customer_email: e.target.value })}
             className="w-full bg-darknet-terminal border border-border-DEFAULT px-3 py-2 font-body text-sm text-white focus:border-neon-blue focus:outline-none" />
-          <input type="text" data-testid="order-phone" placeholder="Phone (optional)" value={formData.customer_phone}
+          <input type="text" placeholder="Phone (optional)" value={formData.customer_phone}
             onChange={(e) => setFormData({ ...formData, customer_phone: e.target.value })}
             className="w-full bg-darknet-terminal border border-border-DEFAULT px-3 py-2 font-body text-sm text-white focus:border-neon-blue focus:outline-none" />
 
           {isTopup && (
             <>
-              <input type="text" data-testid="order-game-id" placeholder="MLBB User ID *" required value={formData.game_id}
+              <input type="text" placeholder="MLBB User ID *" required value={formData.game_id}
                 onChange={(e) => setFormData({ ...formData, game_id: e.target.value })}
                 className="w-full bg-darknet-terminal border border-border-DEFAULT px-3 py-2 font-body text-sm text-white focus:border-neon-blue focus:outline-none" />
-              <input type="text" data-testid="order-server-id" placeholder="Server ID *" required value={formData.server_id}
+              <input type="text" placeholder="Server ID *" required value={formData.server_id}
                 onChange={(e) => setFormData({ ...formData, server_id: e.target.value })}
                 className="w-full bg-darknet-terminal border border-border-DEFAULT px-3 py-2 font-body text-sm text-white focus:border-neon-blue focus:outline-none" />
             </>
@@ -74,25 +75,25 @@ const OrderModal = ({ product, onClose, onSuccess }) => {
 
           <div>
             <label className="font-body text-xs text-text-muted mb-1 block uppercase tracking-wider">Quantity</label>
-            <input type="number" data-testid="order-quantity" min="1" max="100" value={formData.quantity}
+            <input type="number" min="1" max="100" value={formData.quantity}
               onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) || 1 })}
               className="w-full bg-darknet-terminal border border-border-DEFAULT px-3 py-2 font-body text-sm text-white focus:border-neon-blue focus:outline-none" />
           </div>
 
-          <textarea data-testid="order-notes" placeholder="Notes (optional)" rows={2} value={formData.notes}
+          <textarea placeholder="Notes (optional)" rows={2} value={formData.notes}
             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
             className="w-full bg-darknet-terminal border border-border-DEFAULT px-3 py-2 font-body text-sm text-white focus:border-neon-blue focus:outline-none resize-none" />
 
           <div className="border-t border-border-DEFAULT pt-3 flex justify-between items-center">
             <span className="font-body text-sm text-text-secondary">Total:</span>
-            <span className="font-heading text-2xl font-bold text-neon-blue" data-testid="order-total">${total}</span>
+            <span className="font-heading text-2xl font-bold text-neon-blue">${total}</span>
           </div>
 
           <p className="font-body text-xs text-text-muted leading-relaxed">
             Admin will contact you via email to arrange payment after order is placed.
           </p>
 
-          <button type="submit" data-testid="submit-order-btn" disabled={submitting}
+          <button type="submit" disabled={submitting}
             className="w-full px-4 py-3 bg-neon-red border border-neon-red text-white font-heading text-sm tracking-wider uppercase hover:shadow-[0_0_20px_rgba(255,0,60,0.6)] transition-all disabled:opacity-50">
             {submitting ? 'Placing Order...' : 'Place Order'}
           </button>
@@ -108,19 +109,24 @@ const ProductCard = ({ product, onOrder, index }) => (
     animate={{ opacity: 1, y: 0 }}
     transition={{ delay: index * 0.05 }}
     className="bg-darknet-surface border border-border-DEFAULT overflow-hidden hover:border-neon-blue/50 transition-all flex flex-col"
-    data-testid={`product-card-${product.id}`}
   >
     <div className="h-48 bg-darknet-terminal flex items-center justify-center overflow-hidden">
       {product.image_url ? (
         <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
       ) : (
-        <Package className="w-16 h-16 text-text-muted" />
+        <div className="flex flex-col items-center gap-2">
+          {product.section === 'topup' ? (
+            <Gem className="w-16 h-16 text-neon-blue/40" />
+          ) : (
+            <Package className="w-16 h-16 text-neon-purple/40" />
+          )}
+        </div>
       )}
     </div>
     <div className="p-4 flex-1 flex flex-col">
-      <div className="flex items-center gap-2 mb-2">
+      <div className="flex items-center gap-2 mb-2 flex-wrap">
         <span className="px-2 py-0.5 text-[10px] font-body uppercase tracking-[0.2em] border border-neon-purple text-neon-purple">
-          {product.category.replace('_', ' ')}
+          {product.category.replace(/_/g, ' ')}
         </span>
         {product.stock !== null && product.stock !== undefined && product.stock < 10 && (
           <span className="px-2 py-0.5 text-[10px] font-body uppercase tracking-[0.2em] border border-neon-red text-neon-red">
@@ -134,7 +140,6 @@ const ProductCard = ({ product, onOrder, index }) => (
         <span className="font-heading text-xl font-bold text-neon-blue">${product.price}</span>
         <button
           onClick={() => onOrder(product)}
-          data-testid={`buy-product-${product.id}`}
           className="px-4 py-2 bg-neon-red border border-neon-red text-white font-body text-xs uppercase tracking-wider hover:shadow-[0_0_15px_rgba(255,0,60,0.6)] transition-all"
         >
           Buy Now
@@ -145,28 +150,32 @@ const ProductCard = ({ product, onOrder, index }) => (
 );
 
 export const Store = () => {
+  const [section, setSection] = useState('topup');
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
 
-  useEffect(() => {
-    fetchProducts();
-  }, []);
-
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async (sec) => {
+    setLoading(true);
+    setCategoryFilter('All');
     try {
-      const { data } = await axios.get(`${API}/products?section=topup`);
+      const { data } = await axios.get(`${API}/products?section=${sec}`);
       setProducts(data);
     } catch (error) {
       console.error('Error fetching products:', error);
+      setProducts([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const categories = TOPUP_CATEGORIES;
+  useEffect(() => {
+    fetchProducts(section);
+  }, [section, fetchProducts]);
+
+  const categories = section === 'topup' ? TOPUP_CATEGORIES : MERCH_CATEGORIES;
   const filteredProducts = categoryFilter === 'All'
     ? products
     : products.filter((p) => p.category === categoryFilter);
@@ -174,22 +183,66 @@ export const Store = () => {
   return (
     <div className="min-h-screen bg-darknet-bg py-12 px-4">
       <div className="max-w-7xl mx-auto">
+
+        {/* Header */}
         <div className="text-center mb-10">
           <div className="flex justify-center mb-4">
             <div className="w-16 h-16 bg-darknet-terminal border-2 border-neon-purple flex items-center justify-center border-glow-purple">
-              <Gem className="w-8 h-8 text-neon-purple" />
+              <ShoppingBag className="w-8 h-8 text-neon-purple" />
             </div>
           </div>
-          <h1 className="font-heading text-4xl sm:text-5xl md:text-6xl font-black tracking-tighter uppercase mb-4 neon-glow-purple" data-testid="store-title">
-            MLBB Top-Up
+          <h1 className="font-heading text-4xl sm:text-5xl md:text-6xl font-black tracking-tighter uppercase mb-4 neon-glow-purple">
+            NECROLINK Store
           </h1>
           <p className="font-body text-lg text-text-secondary tracking-wide">
-            Diamonds, Weekly Pass, Starlight & Event Passes
+            Official merchandise &amp; MLBB top-ups
           </p>
         </div>
 
+        {/* Section Tabs */}
+        <div className="flex justify-center gap-3 mb-8">
+          <button
+            onClick={() => setSection('topup')}
+            className={`flex items-center gap-2 px-6 py-3 font-heading text-sm font-bold tracking-widest uppercase border-2 transition-all ${
+              section === 'topup'
+                ? 'bg-neon-blue/20 border-neon-blue text-neon-blue shadow-[0_0_20px_rgba(0,229,255,0.3)]'
+                : 'border-border-DEFAULT text-text-secondary hover:border-neon-blue/50 hover:text-neon-blue'
+            }`}
+          >
+            <Gem className="w-4 h-4" />
+            MLBB Top-Up
+          </button>
+          <button
+            onClick={() => setSection('merchandise')}
+            className={`flex items-center gap-2 px-6 py-3 font-heading text-sm font-bold tracking-widest uppercase border-2 transition-all ${
+              section === 'merchandise'
+                ? 'bg-neon-purple/20 border-neon-purple text-neon-purple shadow-[0_0_20px_rgba(176,38,255,0.3)]'
+                : 'border-border-DEFAULT text-text-secondary hover:border-neon-purple/50 hover:text-neon-purple'
+            }`}
+          >
+            <Shirt className="w-4 h-4" />
+            Merchandise
+          </button>
+        </div>
+
+        {/* Section subtitle */}
+        <AnimatePresence mode="wait">
+          <motion.p
+            key={section}
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            className="text-center font-body text-sm text-text-muted mb-8 tracking-wide"
+          >
+            {section === 'topup'
+              ? 'Diamonds · Weekly Pass · Starlight · Event Passes — delivered instantly'
+              : 'Official jerseys, hoodies, mousepads, and more — shipped to your door'}
+          </motion.p>
+        </AnimatePresence>
+
+        {/* Success message */}
         {successMessage && (
-          <div className="bg-neon-blue/10 border border-neon-blue p-4 mb-6 max-w-2xl mx-auto" data-testid="order-success">
+          <div className="bg-neon-blue/10 border border-neon-blue p-4 mb-6 max-w-2xl mx-auto">
             <p className="font-body text-sm text-neon-blue">{successMessage}</p>
           </div>
         )}
@@ -200,30 +253,45 @@ export const Store = () => {
             <button
               key={cat}
               onClick={() => setCategoryFilter(cat)}
-              data-testid={`cat-filter-${cat}`}
               className={`px-3 py-1.5 font-body text-xs uppercase tracking-wider border transition-all ${
                 categoryFilter === cat
-                  ? 'bg-neon-purple/20 border-neon-purple text-neon-purple'
+                  ? section === 'topup'
+                    ? 'bg-neon-blue/20 border-neon-blue text-neon-blue'
+                    : 'bg-neon-purple/20 border-neon-purple text-neon-purple'
                   : 'border-border-DEFAULT text-text-secondary hover:border-neon-purple/50 hover:text-neon-purple'
               }`}
             >
-              {cat === 'All' ? cat : cat.replace('_', ' ')}
+              {cat === 'All' ? 'All' : cat.replace(/_/g, ' ')}
             </button>
           ))}
         </div>
 
+        {/* Products Grid */}
         {loading ? (
-          <p className="text-center font-body text-text-muted">Loading products...</p>
-        ) : filteredProducts.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="font-body text-text-muted" data-testid="no-products">No products available in this category.</p>
-          </div>
-        ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {filteredProducts.map((product, i) => (
-              <ProductCard key={product.id} product={product} index={i} onOrder={setSelectedProduct} />
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="bg-darknet-surface border border-border-DEFAULT animate-pulse h-72" />
             ))}
           </div>
+        ) : filteredProducts.length === 0 ? (
+          <div className="text-center py-16">
+            <Package className="w-16 h-16 text-text-muted mx-auto mb-4" />
+            <p className="font-body text-text-muted">No products available in this category.</p>
+          </div>
+        ) : (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={section + categoryFilter}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"
+            >
+              {filteredProducts.map((product, i) => (
+                <ProductCard key={product.id || product._id} product={product} index={i} onOrder={setSelectedProduct} />
+              ))}
+            </motion.div>
+          </AnimatePresence>
         )}
       </div>
 
@@ -232,8 +300,8 @@ export const Store = () => {
           product={selectedProduct}
           onClose={() => setSelectedProduct(null)}
           onSuccess={() => {
-            setSuccessMessage(`Order placed for "${selectedProduct.name}"! Check your email — admin will contact you for payment.`);
-            setTimeout(() => setSuccessMessage(''), 6000);
+            setSuccessMessage(`Order placed for "${selectedProduct.name}"! Check your email — our admin will contact you for payment within 24 hours.`);
+            setTimeout(() => setSuccessMessage(''), 7000);
           }}
         />
       )}

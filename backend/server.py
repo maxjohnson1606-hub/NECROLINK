@@ -17,12 +17,16 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, BackgroundTasks, UploadFile, File, Header, Query
+from fastapi.encoders import ENCODERS_BY_TYPE
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
 from bson import ObjectId
+
+# Make FastAPI auto-serialize ObjectId → str in all responses
+ENCODERS_BY_TYPE[ObjectId] = str
 import os
 import logging
 import bcrypt
@@ -37,6 +41,24 @@ mongo_url = os.environ['MONGO_URL']
 # Short serverSelectionTimeoutMS so startup doesn't block for 30s per operation
 client = AsyncIOMotorClient(mongo_url, tlsInsecure=True, serverSelectionTimeoutMS=5000, connectTimeoutMS=5000, socketTimeoutMS=5000)
 db = client[os.environ['DB_NAME']]
+
+# ── Sync connectivity test ── switch to in-memory DB if Atlas is unreachable ──
+_USING_MEMDB = False
+try:
+    import pymongo as _pymongo
+    _sc = _pymongo.MongoClient(
+        mongo_url, tlsInsecure=True,
+        serverSelectionTimeoutMS=2500, connectTimeoutMS=2500, socketTimeoutMS=2500
+    )
+    _sc.admin.command('ping')
+    _sc.close()
+    print("✅ [NECROLINK] MongoDB Atlas connected successfully")
+except Exception as _mongo_err:
+    print(f"⚠️  [NECROLINK] MongoDB unavailable ({type(_mongo_err).__name__}) — loading in-memory database")
+    from memdb import create_mem_db as _create_mem_db
+    db = _create_mem_db()
+    _USING_MEMDB = True
+    print("✅ [NECROLINK] In-memory database loaded with full seed data")
 
 # JWT settings
 JWT_ALGORITHM = "HS256"
@@ -408,25 +430,50 @@ async def logout(response: Response):
     return {"message": "Logged out successfully"}
 
 # ============ FILE UPLOAD ============
+_UPLOAD_DIR = ROOT_DIR / "static" / "uploads"
+_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
 @api_router.post("/upload")
 async def upload_file(request: Request, file: UploadFile = File(...)):
     await get_admin_user(request)
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Only image files are allowed")
-    ext = file.filename.split(".")[-1].lower() if "." in file.filename else "bin"
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "jpg"
+    if ext not in ("jpg", "jpeg", "png", "gif", "webp"):
+        ext = "jpg"
     file_id = str(uuid.uuid4())
-    path = f"{APP_NAME}/uploads/{file_id}.{ext}"
     data = await file.read()
     if len(data) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="File too large (max 5MB)")
-    result = put_object(path, data, file.content_type)
-    await db.files.insert_one({
-        "id": file_id, "storage_path": result["path"],
-        "original_filename": file.filename, "content_type": file.content_type,
-        "size": result["size"], "is_deleted": False,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    })
-    return {"id": file_id, "url": f"/api/files/{result['path']}", "path": result["path"]}
+    # Try cloud object storage first; fall back to local disk
+    try:
+        path = f"{APP_NAME}/uploads/{file_id}.{ext}"
+        result = put_object(path, data, file.content_type)
+        url = f"/api/files/{result['path']}"
+        await db.files.insert_one({
+            "id": file_id, "storage_path": result["path"],
+            "original_filename": file.filename, "content_type": file.content_type,
+            "size": result["size"], "is_deleted": False,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+    except Exception as _upload_err:
+        logger.warning(f"Cloud storage unavailable ({_upload_err}), saving locally")
+        fname = f"{file_id}.{ext}"
+        (_UPLOAD_DIR / fname).write_bytes(data)
+        url = f"/api/uploads/{fname}"
+    return {"id": file_id, "url": url}
+
+@api_router.get("/uploads/{filename}")
+async def serve_local_upload(filename: str):
+    """Serve locally saved uploads (fallback when cloud storage is unavailable)."""
+    safe = filename.replace("/", "").replace("..", "")
+    file_path = _UPLOAD_DIR / safe
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    ext = safe.rsplit(".", 1)[-1].lower()
+    ctype = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+             "gif": "image/gif", "webp": "image/webp"}.get(ext, "application/octet-stream")
+    return Response(content=file_path.read_bytes(), media_type=ctype)
 
 @api_router.get("/files/{path:path}")
 async def download_file(path: str):
@@ -1522,8 +1569,11 @@ async def seed_initial_data():
 
 async def _background_startup():
     import asyncio
-    await asyncio.sleep(1)
+    await asyncio.sleep(0.5)
     init_storage()
+    if _USING_MEMDB:
+        logger.info("✅ Using in-memory database — skipping Atlas seeding")
+        return
     try:
         await seed_admin()
         await seed_initial_data()

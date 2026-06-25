@@ -40,7 +40,7 @@ class _MemCursor:
         docs = copy.deepcopy(self._docs)
         if length:
             docs = docs[:length]
-        return docs
+        return [_serialize(d) for d in docs]
 
     def __aiter__(self):
         self._idx = 0
@@ -49,7 +49,7 @@ class _MemCursor:
     async def __anext__(self):
         if self._idx >= len(self._docs):
             raise StopAsyncIteration
-        doc = copy.deepcopy(self._docs[self._idx])
+        doc = _serialize(copy.deepcopy(self._docs[self._idx]))
         self._idx += 1
         return doc
 
@@ -64,6 +64,17 @@ def _sort_val(v):
     if isinstance(v, datetime):
         return (1, v.timestamp())
     return (2, str(v))
+
+
+def _serialize(obj):
+    """Recursively convert ObjectId → str so FastAPI can JSON-encode MemDB docs."""
+    if isinstance(obj, dict):
+        return {k: _serialize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_serialize(v) for v in obj]
+    if isinstance(obj, ObjectId):
+        return str(obj)
+    return obj
 
 
 # ─── Collection ──────────────────────────────────────────────────────────────
@@ -132,9 +143,15 @@ class _MemCollection:
         return True
 
     # ── CRUD ─────────────────────────────────────────────────────────────────
-    async def find_one(self, query=None, projection=None):
+    async def find_one(self, query=None, projection=None, sort=None):
         results = self._match_all(query or {})
-        return copy.deepcopy(results[0]) if results else None
+        if sort and results:
+            if isinstance(sort, list):
+                for key, direc in reversed(sort):
+                    results.sort(key=lambda d: _sort_val(d.get(key)), reverse=(direc == -1))
+            elif isinstance(sort, str):
+                results.sort(key=lambda d: _sort_val(d.get(sort)))
+        return _serialize(copy.deepcopy(results[0])) if results else None
 
     def find(self, query=None, projection=None):
         results = self._match_all(query or {})
@@ -304,21 +321,21 @@ def create_mem_db() -> _MemDB:
             "_id": ObjectId(), "name": "ShadowReaper", "game_name": "NECROLINK_Aamon",
             "role": "Leader", "rank": "Mythical Glory", "wins": 1248, "losses": 312,
             "mvp_count": 487, "points": 9850, "main_heroes": ["Aamon", "Lancelot", "Gusion"],
-            "avatar_url": "https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=200",
-            "bio": "Founder and Leader of NECROLINK. Mythical Glory for 3 seasons straight.",
+            "avatar_url": "/assets/leader.png",
+            "bio": "Founder and Leader of NECROLINK. Jungle main. Mythical Glory for 3 consecutive seasons. 72% win rate. Silent, Shadow, Deadly.",
             "mlbb_id": "123456789", "server_id": "5001",
-            "achievements": ["Mythical Glory S24", "Mythical Glory S25", "Dark Cup Champion"],
+            "achievements": ["Mythical Glory S24", "Mythical Glory S25", "Dark Cup Champion", "Top 3 Global Aamon"],
             "status": "active", "join_date": (now - timedelta(days=365)).isoformat(),
             "created_at": now - timedelta(days=365),
         },
         {
-            "_id": ObjectId(), "name": "CryptoKnight", "game_name": "NECROLINK_Ling",
+            "_id": ObjectId(), "name": "BlazeTrigger", "game_name": "NECROLINK_Beatrix",
             "role": "Co-Leader", "rank": "Mythic", "wins": 876, "losses": 234,
-            "mvp_count": 312, "points": 7200, "main_heroes": ["Ling", "Fanny", "Hayabusa"],
-            "avatar_url": "https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?auto=compress&cs=tinysrgb&w=200",
-            "bio": "Co-Leader and chief strategist. Known for flawless Ling plays.",
+            "mvp_count": 312, "points": 7200, "main_heroes": ["Beatrix", "Granger", "Lesley"],
+            "avatar_url": "/assets/coleader.png",
+            "bio": "Co-Leader and Gold Lane specialist. Beatrix main with 71% win rate. Focus. Aim. Dominate.",
             "mlbb_id": "987654321", "server_id": "5001",
-            "achievements": ["Mythic S25", "Top 50 Global Ling"],
+            "achievements": ["Mythic S25", "Top 50 Global Beatrix", "MVP of Dark Cup 2025"],
             "status": "active", "join_date": (now - timedelta(days=310)).isoformat(),
             "created_at": now - timedelta(days=310),
         },
@@ -411,9 +428,9 @@ def create_mem_db() -> _MemDB:
             "created_at": now - timedelta(days=70),
         },
         {
-            "_id": ObjectId(), "name": "ArcaneHunter", "game_name": "NECROLINK_Beatrix",
+            "_id": ObjectId(), "name": "ArcaneHunter", "game_name": "NECROLINK_Granger",
             "role": "Recruit", "rank": "Elite", "wins": 89, "losses": 67,
-            "mvp_count": 18, "points": 600, "main_heroes": ["Beatrix", "Granger", "Wanwan"],
+            "mvp_count": 18, "points": 600, "main_heroes": ["Granger", "Wanwan", "Yi Sun-shin"],
             "avatar_url": "https://images.pexels.com/photos/1036623/pexels-photo-1036623.jpeg?auto=compress&cs=tinysrgb&w=200",
             "bio": "Rising marksman talent. ArcaneHunter is one to watch.",
             "mlbb_id": "998877665", "server_id": "5001",
