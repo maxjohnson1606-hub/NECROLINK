@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, FileText, Megaphone, Plus, Trash2, CheckCircle, XCircle,
   Calendar, Newspaper, ShoppingBag, BarChart3, Edit, Upload, Package, Pin,
-  Image as ImageIcon, UserCog, Shield, Key, X, Save, AlertTriangle
+  Image as ImageIcon, UserCog, Shield, Key, X, Save, AlertTriangle,
+  MessageCircle, RefreshCw, Search
 } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
@@ -1164,6 +1165,190 @@ const SettingsTab = () => {
   );
 };
 
+// =============== CHAT MANAGEMENT TAB ===============
+const ROLE_BADGE_COLORS = {
+  owner: 'bg-neon-red/20 text-neon-red border-neon-red/40',
+  admin: 'bg-neon-purple/20 text-neon-purple border-neon-purple/40',
+  member: 'bg-neon-blue/20 text-neon-blue border-neon-blue/40',
+};
+
+const ChatManagementTab = () => {
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filterChannel, setFilterChannel] = useState('all');
+  const [search, setSearch] = useState('');
+  const [msg, setMsg] = useState('');
+  const [deleting, setDeleting] = useState(null);
+
+  const fetchMessages = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await axios.get(`${API}/chat/all?limit=150`, { withCredentials: true });
+      setMessages(data);
+    } catch (e) {
+      setMsg('Failed to load messages: ' + (e.response?.data?.detail || e.message));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchMessages(); }, [fetchMessages]);
+
+  const handleDelete = async (m) => {
+    if (!m.id || !window.confirm(`Delete message from ${m.user_name}?`)) return;
+    setDeleting(m.id);
+    try {
+      await axios.delete(`${API}/chat/messages/${m.id}`, { withCredentials: true });
+      setMessages(prev => prev.filter(x => x.id !== m.id));
+      setMsg('Message deleted.');
+      setTimeout(() => setMsg(''), 3000);
+    } catch (e) {
+      setMsg('Error: ' + (e.response?.data?.detail || e.message));
+    } finally {
+      setDeleting(null); }
+  };
+
+  const handleClear = async (channel) => {
+    const label = channel === 'all' ? 'ALL channels' : `#${channel}`;
+    if (!window.confirm(`Clear all messages in ${label}? This cannot be undone.`)) return;
+    try {
+      const { data } = await axios.delete(`${API}/chat/clear/${channel}`, { withCredentials: true });
+      setMsg(data.message);
+      setTimeout(() => setMsg(''), 4000);
+      fetchMessages();
+    } catch (e) {
+      setMsg('Error: ' + (e.response?.data?.detail || e.message));
+    }
+  };
+
+  const filtered = messages.filter(m => {
+    const chanOk = filterChannel === 'all' || m.channel === filterChannel;
+    const searchOk = !search || m.message?.toLowerCase().includes(search.toLowerCase()) || m.user_name?.toLowerCase().includes(search.toLowerCase());
+    return chanOk && searchOk;
+  });
+
+  const memberCount = messages.filter(m => m.channel === 'members').length;
+  const staffCount = messages.filter(m => m.channel === 'staff').length;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <h2 className="font-heading text-xl font-bold text-neon-blue uppercase flex items-center gap-2">
+          <MessageCircle className="w-5 h-5" /> Chat Management
+        </h2>
+        <button onClick={fetchMessages} className="flex items-center gap-1.5 px-3 py-1.5 border border-border-DEFAULT text-text-muted hover:text-neon-blue hover:border-neon-blue font-body text-xs uppercase transition-colors">
+          <RefreshCw className="w-3 h-3" /> Refresh
+        </button>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: 'Total Messages', value: messages.length, color: 'text-neon-blue', border: 'border-neon-blue/30' },
+          { label: '#members', value: memberCount, color: 'text-neon-blue', border: 'border-neon-blue/30' },
+          { label: '#staff-only', value: staffCount, color: 'text-neon-red', border: 'border-neon-red/30' },
+        ].map(s => (
+          <div key={s.label} className={`bg-darknet-surface border ${s.border} p-4 text-center`}>
+            <p className={`font-heading text-2xl font-bold ${s.color}`}>{s.value}</p>
+            <p className="font-body text-[10px] text-text-muted uppercase">{s.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {msg && (
+        <div className={`p-3 font-body text-xs border ${msg.startsWith('Error') ? 'border-neon-red text-neon-red bg-neon-red/10' : 'border-neon-blue text-neon-blue bg-neon-blue/10'}`}>
+          {msg}
+        </div>
+      )}
+
+      {/* Filters + Clear Actions */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="flex gap-1">
+          {['all', 'members', 'staff'].map(c => (
+            <button key={c} onClick={() => setFilterChannel(c)}
+              className={`px-3 py-1.5 font-body text-xs uppercase tracking-wider border transition-colors ${filterChannel === c ? 'border-neon-blue text-neon-blue bg-neon-blue/10' : 'border-border-DEFAULT text-text-muted hover:text-white'}`}>
+              {c === 'all' ? 'All' : `#${c}`}
+            </button>
+          ))}
+        </div>
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-text-muted" />
+          <input
+            type="text" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search messages or usernames..."
+            className="w-full pl-8 pr-3 py-1.5 bg-darknet-terminal border border-border-DEFAULT text-white font-body text-xs focus:border-neon-blue focus:outline-none"
+          />
+        </div>
+        <div className="flex gap-1">
+          <button onClick={() => handleClear('members')}
+            className="px-3 py-1.5 border border-neon-blue/40 text-neon-blue font-body text-xs uppercase hover:bg-neon-blue/10 transition-colors">
+            Clear #members
+          </button>
+          <button onClick={() => handleClear('staff')}
+            className="px-3 py-1.5 border border-neon-red/40 text-neon-red font-body text-xs uppercase hover:bg-neon-red/10 transition-colors">
+            Clear #staff
+          </button>
+          <button onClick={() => handleClear('all')}
+            className="px-3 py-1.5 bg-neon-red/10 border border-neon-red text-neon-red font-body text-xs uppercase font-bold hover:bg-neon-red/20 transition-colors">
+            Clear All
+          </button>
+        </div>
+      </div>
+
+      {/* Message List */}
+      <div className="bg-darknet-terminal border border-border-DEFAULT">
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="w-6 h-6 border-2 border-neon-blue border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-12 font-body text-sm text-text-muted">
+            {search || filterChannel !== 'all' ? 'No messages match your filter.' : 'No messages yet.'}
+          </div>
+        ) : (
+          <div className="divide-y divide-border-DEFAULT max-h-[600px] overflow-y-auto">
+            {filtered.map(m => (
+              <div key={m.id || m.created_at} className="flex items-start gap-3 p-3 hover:bg-white/[0.02] group">
+                {/* Channel badge */}
+                <span className={`flex-shrink-0 mt-0.5 px-1.5 py-0.5 text-[9px] font-body uppercase border rounded-sm ${m.channel === 'staff' ? 'border-neon-red/40 text-neon-red bg-neon-red/10' : 'border-neon-blue/40 text-neon-blue bg-neon-blue/10'}`}>
+                  {m.channel}
+                </span>
+                {/* Role badge */}
+                <span className={`flex-shrink-0 mt-0.5 px-1.5 py-0.5 text-[9px] font-body uppercase border rounded-sm ${ROLE_BADGE_COLORS[m.user_role] || 'border-border-DEFAULT text-text-muted'}`}>
+                  {m.user_role}
+                </span>
+                {/* Author */}
+                <span className="flex-shrink-0 font-body text-xs font-bold text-white w-24 truncate mt-0.5">{m.user_name}</span>
+                {/* Message */}
+                <span className="flex-1 font-body text-xs text-text-secondary break-words">{m.message}</span>
+                {/* Time */}
+                <span className="flex-shrink-0 font-body text-[10px] text-text-muted mt-0.5">
+                  {m.created_at ? new Date(m.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
+                </span>
+                {/* Delete */}
+                <button
+                  onClick={() => handleDelete(m)}
+                  disabled={deleting === m.id}
+                  className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-text-muted hover:text-neon-red disabled:opacity-30"
+                  title="Delete message"
+                >
+                  {deleting === m.id
+                    ? <div className="w-3.5 h-3.5 border border-neon-red border-t-transparent rounded-full animate-spin" />
+                    : <Trash2 className="w-3.5 h-3.5" />
+                  }
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <p className="font-body text-[10px] text-text-muted">
+        Showing {filtered.length} of {messages.length} messages · Newest messages appear at the top · Hover to reveal delete button
+      </p>
+    </div>
+  );
+};
+
 // =============== MAIN DASHBOARD ===============
 export const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('stats');
@@ -1199,6 +1384,7 @@ export const AdminDashboard = () => {
     { id: 'products', label: 'Products', icon: ShoppingBag, perm: 'manage_products' },
     { id: 'orders', label: 'Orders', icon: Package, badge: stats?.pending_orders, perm: 'manage_orders' },
     { id: 'announcements', label: 'Announcements', icon: Megaphone, perm: 'manage_announcements' },
+    { id: 'chat', label: 'Chat', icon: MessageCircle, perm: 'moderate_chat' },
     ...(isOwner ? [
       { id: 'users', label: 'Users', icon: UserCog, badge: stats?.users, perm: null },
       { id: 'settings', label: 'Settings', icon: Shield, perm: null },
@@ -1362,6 +1548,7 @@ export const AdminDashboard = () => {
           {activeTab === 'products' && <ProductsTab />}
           {activeTab === 'orders' && <OrdersTab />}
           {activeTab === 'announcements' && <AnnouncementsTab />}
+          {activeTab === 'chat' && <ChatManagementTab />}
           {activeTab === 'users' && isOwner && <UsersTab />}
           {activeTab === 'settings' && isOwner && <SettingsTab />}
         </div>

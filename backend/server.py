@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 import ssl
 
-# Patch SSL context to lower security level for OpenSSL 3.x compatibility with MongoDB Atlas
+# Patch SSL context for OpenSSL 3.x + MongoDB Atlas compatibility
 _orig_create_default_context = ssl.create_default_context
 def _patched_create_default_context(*args, **kwargs):
     ctx = _orig_create_default_context(*args, **kwargs)
@@ -18,6 +18,8 @@ load_dotenv(ROOT_DIR / '.env')
 
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, BackgroundTasks, UploadFile, File, Header, Query
 from fastapi.encoders import ENCODERS_BY_TYPE
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field
@@ -36,37 +38,12 @@ import requests
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
-# MongoDB connection — fall back to in-memory DB if MONGO_URL is not set or unreachable
+# ── Database priority: PostgreSQL (persistent) → MongoDB Atlas → in-memory ──
 _USING_MEMDB = False
-mongo_url = os.environ.get('MONGO_URL', '')
-_DB_NAME = os.environ.get('DB_NAME', 'necrolink')
+_USING_POSTGRES = False
+client = None  # Motor client (only set when using MongoDB)
 
-if mongo_url:
-    client = AsyncIOMotorClient(mongo_url, tlsInsecure=True, serverSelectionTimeoutMS=5000, connectTimeoutMS=5000, socketTimeoutMS=5000)
-    db = client[_DB_NAME]
-    try:
-        import pymongo as _pymongo
-        _sc = _pymongo.MongoClient(
-            mongo_url, tlsInsecure=True,
-            serverSelectionTimeoutMS=2500, connectTimeoutMS=2500, socketTimeoutMS=2500
-        )
-        _sc.admin.command('ping')
-        _sc.close()
-        print("✅ [NECROLINK] MongoDB Atlas connected successfully")
-    except Exception as _mongo_err:
-        print(f"⚠️  [NECROLINK] MongoDB unreachable ({type(_mongo_err).__name__}) — loading in-memory database")
-        from memdb import create_mem_db as _create_mem_db
-        db = _create_mem_db()
-        _USING_MEMDB = True
-        print("✅ [NECROLINK] In-memory database loaded with full seed data")
-else:
-    print("⚠️  [NECROLINK] MONGO_URL not set — loading in-memory database")
-    from memdb import create_mem_db as _create_mem_db
-    # Provide a dummy motor client (not used when _USING_MEMDB=True)
-    client = None
-    db = _create_mem_db()
-    _USING_MEMDB = True
-    print("✅ [NECROLINK] In-memory database loaded with full seed data")
+db = None  # Will be set below or in startup_event for PostgreSQL
 
 # JWT settings
 JWT_ALGORITHM = "HS256"
@@ -1627,26 +1604,71 @@ async def seed_initial_data():
 
 async def _background_startup():
     import asyncio
-    await asyncio.sleep(0.5)
+    global db, _USING_MEMDB, _USING_POSTGRES, client
+
+    await asyncio.sleep(0.3)
     init_storage()
-    if _USING_MEMDB:
-        logger.info("✅ Using in-memory database — skipping Atlas seeding")
-        return
-    try:
-        await seed_admin()
-        await seed_initial_data()
-    except Exception as e:
-        logger.error(f"Startup seeding failed (DB may not be reachable): {e}")
-    try:
-        await db.users.create_index("email", unique=True)
-        await db.members.create_index("game_name", unique=True)
-    except Exception as e:
-        logger.warning(f"Index creation: {e}")
+
+    # 1️⃣ Try PostgreSQL (Replit built-in — always persistent)
+    if os.environ.get('DATABASE_URL'):
+        try:
+            from pgdb import create_pg_db
+            pg = await create_pg_db()
+            if pg is not None:
+                db = pg
+                _USING_POSTGRES = True
+                _USING_MEMDB = False
+                logger.info("✅ Database: PostgreSQL (persistent)")
+        except Exception as e:
+            logger.warning(f"PostgreSQL init failed: {e}")
+
+    # 2️⃣ Try MongoDB Atlas if PG not available
+    if not _USING_POSTGRES:
+        mongo_url = os.environ.get('MONGO_URL', '')
+        _DB_NAME = os.environ.get('DB_NAME', 'necrolink')
+        if mongo_url:
+            try:
+                import pymongo as _pymongo
+                _sc = _pymongo.MongoClient(
+                    mongo_url, tlsInsecure=True,
+                    serverSelectionTimeoutMS=2500, connectTimeoutMS=2500, socketTimeoutMS=2500
+                )
+                _sc.admin.command('ping')
+                _sc.close()
+                client = AsyncIOMotorClient(mongo_url, tlsInsecure=True, serverSelectionTimeoutMS=5000)
+                db = client[_DB_NAME]
+                _USING_MEMDB = False
+                logger.info("✅ Database: MongoDB Atlas (persistent)")
+            except Exception as e:
+                logger.warning(f"MongoDB unreachable ({e}) — falling back to in-memory DB")
+
+    # 3️⃣ Fall back to in-memory
+    if not _USING_POSTGRES and not (client is not None and not _USING_MEMDB):
+        from memdb import create_mem_db as _create_mem_db
+        db = _create_mem_db()
+        _USING_MEMDB = True
+        logger.warning("⚠️  Database: in-memory (data will reset on restart)")
+
+    # Seed only if fresh (PostgreSQL or MongoDB)
+    if not _USING_MEMDB:
+        try:
+            await seed_admin()
+            await seed_initial_data()
+        except Exception as e:
+            logger.error(f"Startup seeding failed: {e}")
+    else:
+        logger.info("✅ In-memory database loaded with full seed data")
+
     logger.info("Startup complete")
 
 @app.on_event("startup")
 async def startup_event():
     import asyncio
+    # Pre-load in-memory DB synchronously so the app is immediately usable
+    global db, _USING_MEMDB
+    from memdb import create_mem_db as _create_mem_db
+    db = _create_mem_db()
+    _USING_MEMDB = True
     asyncio.create_task(_background_startup())
     logger.info("Background startup task scheduled")
 
@@ -1734,3 +1756,35 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Serve React build in production ──────────────────────────────────────────
+_FRONTEND_BUILD = ROOT_DIR.parent / "frontend" / "build"
+if _FRONTEND_BUILD.exists():
+    # Serve static assets (JS, CSS, images, etc.)
+    _static_dir = _FRONTEND_BUILD / "static"
+    if _static_dir.exists():
+        app.mount("/static", StaticFiles(directory=str(_static_dir)), name="react-static")
+
+    # Serve root-level files (favicon, manifest, etc.)
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def favicon():
+        p = _FRONTEND_BUILD / "favicon.ico"
+        return FileResponse(str(p)) if p.exists() else Response(status_code=404)
+
+    @app.get("/manifest.json", include_in_schema=False)
+    async def manifest():
+        p = _FRONTEND_BUILD / "manifest.json"
+        return FileResponse(str(p)) if p.exists() else Response(status_code=404)
+
+    @app.get("/assets/{path:path}", include_in_schema=False)
+    async def assets(path: str):
+        p = _FRONTEND_BUILD / "assets" / path
+        return FileResponse(str(p)) if p.exists() else Response(status_code=404)
+
+    # Catch-all: serve index.html for React Router paths
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_react(full_path: str):
+        index = _FRONTEND_BUILD / "index.html"
+        if index.exists():
+            return FileResponse(str(index))
+        return Response("Frontend not built", status_code=503)
