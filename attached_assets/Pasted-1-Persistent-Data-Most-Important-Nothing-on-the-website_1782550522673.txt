@@ -1,0 +1,370 @@
+1. Persistent Data (Most Important)
+
+Nothing on the website should reset after refreshing the page.
+
+Every change made by the Owner or Admin must be permanently saved in the database.
+
+This includes:
+
+News
+Events
+Clan members
+Teams
+Player profiles
+User accounts
+Roles
+Permissions
+Store items
+Shop inventory
+Gallery
+Tournament data
+Match history
+Recruitment status
+Announcements
+Home page edits
+Hero tier lists
+Rankings
+Achievements
+Social links
+Contact information
+Settings
+Banners
+Logos
+Images
+Theme settings
+Navigation menu
+Everything editable on the website
+
+Refreshing the page must NEVER restore default values.
+
+The website must always load the latest saved data from the database.
+
+Use a real backend database (Supabase, Firebase Firestore, PostgreSQL, or another production database). Do NOT use localStorage, sessionStorage, mock data, or temporary state for production data.
+
+2. Real Authentication
+
+Implement secure authentication.
+
+Users can:
+
+Register
+Login
+Logout
+Reset password
+Verify email
+Change email
+Change password
+Upload avatar
+Edit profile
+
+Owner can:
+
+Ban users
+Unban users
+Delete users
+Change usernames
+Assign roles
+Reset user passwords
+View user activity
+3. Role System
+
+Create a complete role-based permission system.
+
+Roles:
+
+Owner
+Co Owner
+Administrator
+Moderator
+Staff
+Team Captain
+Tournament Manager
+Member
+Guest
+
+Owner can:
+
+Create roles
+Delete roles
+Edit permissions
+Assign permissions individually
+
+Example permissions:
+
+Edit News
+Delete News
+Manage Shop
+Edit Teams
+Approve Members
+Ban Users
+Manage Events
+Upload Images
+Manage Recruitment
+Manage Chat
+Create Announcements
+Edit Homepage
+Manage Tournaments
+Manage Store
+Manage Hero Builds
+4. Staff Chat System
+
+Replace the current chat.
+
+Create a professional real-time messaging system.
+
+Features:
+
+Global Clan Chat
+
+Everyone can use it.
+
+Staff Chat
+
+Visible only to:
+
+Owner
+Co Owner
+Admin
+Moderator
+Staff
+
+Players cannot access it.
+
+Private Messages
+
+Users can message each other.
+
+Group Chats
+
+Create custom chat rooms.
+
+Features
+Real-time updates
+Online status
+Typing indicator
+Read receipts
+Reply
+Edit messages
+Delete messages
+Emoji support
+Image sharing
+File sharing
+GIF support
+Voice messages
+Search messages
+Pin important messages
+Mention users (@username)
+Notifications
+Unread badge
+Message timestamps
+Infinite message history stored in database
+
+Messages must remain after refreshing.
+
+Messages must never disappear.
+
+5. Admin Dashboard
+
+Create a professional dashboard showing:
+
+Total members
+Online members
+Registered users
+Active players
+Total tournaments
+Revenue
+Store sales
+Chat statistics
+Recruitment requests
+Website analytics
+Recent activity
+Reports
+Logs
+6. Owner Dashboard
+
+Owner has complete control.
+
+Can:
+
+Edit every page
+Add/remove admins
+Manage permissions
+Change website theme
+Upload logos
+Upload banners
+Manage database entries
+Backup database
+Restore backups
+Export data
+Import data
+7. Store Management
+
+Everything editable.
+
+Owner/Admin can:
+
+Add products
+Remove products
+Change prices
+Upload images
+Change stock
+Create discounts
+Create coupons
+Manage orders
+
+Changes stay permanently.
+
+8. News System
+
+Automatically import posts from:
+
+Official MLBB Instagram
+Official MLBB YouTube Community posts
+
+Allow Owner/Admin to manually create news.
+
+Support:
+
+Rich text editor
+Images
+Videos
+Categories
+Tags
+Featured news
+Scheduled publishing
+Drafts
+9. Events
+
+Create a full event management system.
+
+Support:
+
+Upcoming events
+Countdown timer
+Registration
+Attendance
+Rewards
+Images
+Calendar view
+10. Tournament System
+
+Support:
+
+Brackets
+Teams
+Scores
+MVP
+Statistics
+Match schedule
+Live updates
+Tournament history
+11. Notifications
+
+Real-time notifications.
+
+Notify users when:
+
+Someone messages them
+Event created
+Tournament announced
+News posted
+Store updated
+Recruitment accepted
+Admin announcement
+12. File Storage
+
+Store all uploaded:
+
+Images
+Videos
+Documents
+Logos
+Team icons
+
+Use cloud storage.
+
+Never lose uploaded files.
+
+13. Performance
+
+Optimize everything.
+
+Lazy loading
+Image optimization
+Pagination
+Fast database queries
+Caching
+Responsive design
+Mobile friendly
+Dark mode
+Light mode
+14. Security
+
+Implement:
+
+Authentication middleware
+Protected routes
+Permission middleware
+Rate limiting
+CSRF protection
+XSS protection
+SQL injection protection
+Secure password hashing
+Input validation
+15. Database
+
+Design a proper relational database with tables for:
+
+Users
+Roles
+Permissions
+Teams
+Clan Members
+News
+Events
+Messages
+Chat Rooms
+Products
+Orders
+Tournaments
+Match Results
+Announcements
+Recruitment
+Gallery
+Notifications
+Activity Logs
+Settings
+16. Activity Logs
+
+Track everything.
+
+Example:
+
+User logged in
+User promoted
+News edited
+Event deleted
+Product changed
+Role updated
+Member removed
+Password changed
+
+Owner can view all logs.
+
+17. Auto Save
+
+Every edit should save automatically (or through an explicit Save button) to the database.
+
+No changes should ever be lost after refreshing, logging out, or switching devices.
+
+18. Final Requirement
+
+The website must behave like a real SaaS platform, not a static website.
+
+No mock data.
+
+No placeholder content.
+
+No fake APIs.
+
+No temporary storage.
