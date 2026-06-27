@@ -1747,6 +1747,48 @@ async def clear_chat_channel(channel: str, request: Request):
     result = await db.chat_messages.delete_many(query)
     return {"message": f"Cleared {result.deleted_count} messages"}
 
+# ============ ONLINE STATUS ============
+@api_router.post("/online/heartbeat")
+async def online_heartbeat(request: Request):
+    """Called every 30s by logged-in clients to mark them as online."""
+    try:
+        user = await get_current_user(request)
+    except HTTPException:
+        return {"ok": False}
+    now = datetime.now(timezone.utc).isoformat()
+    user_id = str(user.get("_id", user.get("id", "")))
+    await db.online_status.update_one(
+        {"user_id": user_id},
+        {"$set": {
+            "user_id": user_id,
+            "user_name": user.get("name", ""),
+            "user_role": user.get("role", "member"),
+            "game_name": user.get("game_name", ""),
+            "last_seen": now,
+        }},
+        upsert=True,
+    )
+    return {"ok": True, "last_seen": now}
+
+@api_router.get("/online/status")
+async def get_online_status():
+    """Returns list of users seen in the last 3 minutes. No auth required."""
+    cutoff_dt = datetime.now(timezone.utc) - timedelta(minutes=3)
+    cutoff = cutoff_dt.isoformat()
+    all_statuses = await db.online_status.find({}).sort("last_seen", -1).to_list(500)
+    online = []
+    for s in all_statuses:
+        last = s.get("last_seen", "")
+        if last >= cutoff:
+            online.append({
+                "user_id": s.get("user_id", ""),
+                "user_name": s.get("user_name", ""),
+                "user_role": s.get("user_role", "member"),
+                "game_name": s.get("game_name", ""),
+                "last_seen": last,
+            })
+    return {"online": online, "count": len(online)}
+
 app.include_router(api_router)
 
 app.add_middleware(
@@ -1759,32 +1801,54 @@ app.add_middleware(
 
 # ── Serve React build in production ──────────────────────────────────────────
 _FRONTEND_BUILD = ROOT_DIR.parent / "frontend" / "build"
-if _FRONTEND_BUILD.exists():
-    # Serve static assets (JS, CSS, images, etc.)
-    _static_dir = _FRONTEND_BUILD / "static"
-    if _static_dir.exists():
-        app.mount("/static", StaticFiles(directory=str(_static_dir)), name="react-static")
+# ── Static assets (only mounted when React build exists) ─────────────────────
+_static_dir = _FRONTEND_BUILD / "static"
+if _static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(_static_dir)), name="react-static")
 
-    # Serve root-level files (favicon, manifest, etc.)
-    @app.get("/favicon.ico", include_in_schema=False)
-    async def favicon():
-        p = _FRONTEND_BUILD / "favicon.ico"
-        return FileResponse(str(p)) if p.exists() else Response(status_code=404)
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    p = _FRONTEND_BUILD / "favicon.ico"
+    return FileResponse(str(p)) if p.exists() else Response(status_code=204)
 
-    @app.get("/manifest.json", include_in_schema=False)
-    async def manifest():
-        p = _FRONTEND_BUILD / "manifest.json"
-        return FileResponse(str(p)) if p.exists() else Response(status_code=404)
+@app.get("/manifest.json", include_in_schema=False)
+async def manifest():
+    p = _FRONTEND_BUILD / "manifest.json"
+    return FileResponse(str(p)) if p.exists() else Response(status_code=204)
 
-    @app.get("/assets/{path:path}", include_in_schema=False)
-    async def assets(path: str):
-        p = _FRONTEND_BUILD / "assets" / path
-        return FileResponse(str(p)) if p.exists() else Response(status_code=404)
+@app.get("/assets/{path:path}", include_in_schema=False)
+async def assets(path: str):
+    p = _FRONTEND_BUILD / "assets" / path
+    return FileResponse(str(p)) if p.exists() else Response(status_code=404)
 
-    # Catch-all: serve index.html for React Router paths
-    @app.get("/{full_path:path}", include_in_schema=False)
-    async def serve_react(full_path: str):
-        index = _FRONTEND_BUILD / "index.html"
-        if index.exists():
-            return FileResponse(str(index))
-        return Response("Frontend not built", status_code=503)
+# ── Catch-all: always registered so "/" never falls through to a 404 ──────────
+_SPLASH = """<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>NECROLINK</title>
+<style>
+body{margin:0;background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:monospace;}
+.c{text-align:center;padding:2rem;}
+h1{color:#B026FF;font-size:3rem;letter-spacing:.3em;text-transform:uppercase;margin:0 0 .5rem;}
+p{color:#00E5FF;font-size:.9rem;letter-spacing:.15em;margin:.5rem 0;}
+.s{color:#555;font-size:.75rem;margin-top:2rem;}
+</style>
+</head>
+<body>
+<div class="c">
+  <h1>NECROLINK</h1>
+  <p>MLBB Elite Clan</p>
+  <p style="color:#555;margin-top:1rem;">Initializing systems&hellip;</p>
+  <div class="s">If this page persists, the deployment is still starting up.</div>
+</div>
+<script>setTimeout(()=>location.reload(),4000);</script>
+</body>
+</html>"""
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def serve_react(full_path: str):
+    from fastapi.responses import HTMLResponse
+    index = _FRONTEND_BUILD / "index.html"
+    if index.exists():
+        return FileResponse(str(index))
+    return HTMLResponse(_SPLASH, status_code=200)

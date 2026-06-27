@@ -17,48 +17,56 @@ import { Gallery } from './pages/Gallery';
 import { Profile } from './pages/Profile';
 import { Chat } from './pages/Chat';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { useHeartbeat } from './hooks/useHeartbeat';
 import '@/App.css';
+
+function AppInner() {
+  useHeartbeat();
+  return (
+    <div className="App min-h-screen flex flex-col bg-darknet-bg">
+      <Navigation />
+      <main className="flex-1">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/members" element={<Members />} />
+          <Route path="/events" element={<Events />} />
+          <Route path="/news" element={<News />} />
+          <Route path="/gallery" element={<Gallery />} />
+          <Route path="/store" element={<Store />} />
+          <Route path="/join" element={<JoinUs />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/chat" element={<Chat />} />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute adminOnly={true}>
+                <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </main>
+      <Footer />
+      <AIAssistant />
+    </div>
+  );
+}
 
 function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <div className="App min-h-screen flex flex-col bg-darknet-bg">
-          <Navigation />
-          <main className="flex-1">
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/about" element={<About />} />
-              <Route path="/members" element={<Members />} />
-              <Route path="/events" element={<Events />} />
-              <Route path="/news" element={<News />} />
-              <Route path="/gallery" element={<Gallery />} />
-              <Route path="/store" element={<Store />} />
-              <Route path="/join" element={<JoinUs />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/chat" element={<Chat />} />
-              <Route
-                path="/profile"
-                element={
-                  <ProtectedRoute>
-                    <Profile />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/admin"
-                element={
-                  <ProtectedRoute adminOnly={true}>
-                    <AdminDashboard />
-                  </ProtectedRoute>
-                }
-              />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </main>
-          <Footer />
-          <AIAssistant />
-        </div>
+        <AppInner />
       </BrowserRouter>
     </AuthProvider>
   );

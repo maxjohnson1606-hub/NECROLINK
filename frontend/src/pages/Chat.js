@@ -4,6 +4,8 @@ import { Send, MessageCircle, Shield, Users, Trash2, AlertCircle, Lock, RefreshC
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import { Link } from 'react-router-dom';
+import { OnlineDot, OnlineCountBadge } from '../components/OnlineDot';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -87,11 +89,11 @@ export const Chat = () => {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [onlineNote, setOnlineNote] = useState('');
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const pollRef = useRef(null);
   const isStaff = user?.role === 'admin' || user?.role === 'owner';
+  const { onlineCount, onlineUsers, isOnline } = useOnlineStatus();
 
   const fetchMessages = useCallback(async (silent = false) => {
     try {
